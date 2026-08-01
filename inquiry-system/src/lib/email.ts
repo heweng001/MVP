@@ -1,14 +1,15 @@
 import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { appUrl } from "./constants";
 import { getSmtpConfig, isSmtpReady, type SmtpConfig } from "./settings";
 
 function transporterFrom(cfg: SmtpConfig) {
   if (!isSmtpReady(cfg)) return null;
-  return nodemailer.createTransport({
+  // family 强制 IPv4：类型定义未列出，但 nodemailer/net 支持
+  const options = {
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
-    // 阿里云等环境常无可用 IPv6，避免解析到 AAAA 后 ENETUNREACH
     family: 4,
     requireTLS: !cfg.secure && cfg.port === 587,
     auth: cfg.user
@@ -17,7 +18,8 @@ function transporterFrom(cfg: SmtpConfig) {
           pass: cfg.pass || "",
         }
       : undefined,
-  });
+  } as SMTPTransport.Options;
+  return nodemailer.createTransport(options);
 }
 
 export type InquiryMailPayload = {
