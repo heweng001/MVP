@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
+import { PageHeader } from "@/components/PageHeader";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -23,15 +24,12 @@ export default async function InquiryDetailPage({ params }: Ctx) {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-semibold">询盘详情</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">
-          {item.site.client.name} · {item.site.domain} ·{" "}
-          {STATUS_LABELS[item.status] || item.status}
-        </p>
-      </div>
+      <PageHeader
+        title="询盘详情"
+        hint={`${item.site.client.name} · ${item.site.domain} · ${STATUS_LABELS[item.status] || item.status}`}
+      />
 
-      <div className="bg-white border border-[var(--line)] rounded-xl p-4 space-y-3">
+      <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg p-4 space-y-3 shadow-sm">
         <InquiryActions id={item.id} mode="detail" />
         <dl className="grid md:grid-cols-2 gap-3 text-sm">
           <div>

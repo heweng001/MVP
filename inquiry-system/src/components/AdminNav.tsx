@@ -7,8 +7,8 @@ const links = [
   { href: "/admin", label: "统计概览" },
   { href: "/admin/inquiries", label: "询盘列表" },
   { href: "/admin/clients", label: "客户列表" },
-  { href: "/admin/promos", label: "信息核对" },
   { href: "/admin/sites", label: "网站列表" },
+  { href: "/admin/promos", label: "信息核对" },
   { href: "/admin/blacklist", label: "黑名单" },
   { href: "/admin/settings", label: "发件设置" },
 ];
@@ -24,12 +24,12 @@ export function AdminNav() {
   }
 
   return (
-    <aside className="w-56 shrink-0 border-r border-[var(--line)] bg-white/80 backdrop-blur p-4 min-h-screen">
-      <div className="mb-8">
-        <div className="text-lg font-semibold">询盘管理</div>
-        <div className="text-xs text-[var(--muted)] mt-1">v1.1 MVP</div>
+    <aside className="w-[220px] shrink-0 bg-[var(--sidebar)] text-white flex flex-col min-h-screen">
+      <div className="px-4 py-5 border-b border-white/10">
+        <div className="text-[15px] font-semibold tracking-tight">询盘管理</div>
+        <div className="text-[11px] text-[var(--sidebar-muted)] mt-0.5">贸牛 · SaaS 工作台</div>
       </div>
-      <nav className="flex flex-col gap-1">
+      <nav className="flex-1 p-2 space-y-0.5">
         {links.map((l) => {
           const active =
             l.href === "/admin"
@@ -39,8 +39,10 @@ export function AdminNav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`rounded-lg px-3 py-2 text-sm ${
-                active ? "bg-[var(--brand)] text-white" : "hover:bg-black/5"
+              className={`block rounded-md px-3 py-2 text-[13px] transition-colors ${
+                active
+                  ? "bg-[var(--sidebar-active)] text-white font-medium"
+                  : "text-slate-300 hover:bg-[var(--sidebar-hover)] hover:text-white"
               }`}
             >
               {l.label}
@@ -48,12 +50,14 @@ export function AdminNav() {
           );
         })}
       </nav>
-      <button
-        onClick={logout}
-        className="mt-10 text-sm text-[var(--muted)] hover:text-[var(--ink)]"
-      >
-        退出登录
-      </button>
+      <div className="p-3 border-t border-white/10 space-y-2">
+        <button
+          onClick={logout}
+          className="w-full text-left text-[12px] text-[var(--sidebar-muted)] hover:text-white px-2 py-1.5 rounded-md hover:bg-[var(--sidebar-hover)]"
+        >
+          退出登录
+        </button>
+      </div>
     </aside>
   );
 }

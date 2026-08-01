@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { HelpCallout } from "@/components/HelpCallout";
 import { ClientList } from "@/components/ClientList";
+import { PageHeader } from "@/components/PageHeader";
 
 export default async function ClientsPage({
   searchParams,
@@ -36,22 +36,22 @@ export default async function ClientsPage({
   });
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">客户列表</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">
-          管理客户档案；一个客户可对应多个网站。
-        </p>
-      </div>
-      <HelpCallout title="字段说明">
-        <p>
-          <strong>服务开始 / 服务结束</strong>
-          由下属网站自动计算（所有网站中最早开始、最晚结束），请在「网站列表」维护各站日期。
-        </p>
-        <p>
-          <strong>客户分层</strong>：重点 / 正常 / 维护。创建客户后，再到网站列表添加域名，点「配置对接」按清单接入。
-        </p>
-      </HelpCallout>
+    <div>
+      <PageHeader
+        title="客户列表"
+        hint={
+          <div className="space-y-1.5">
+            <p>管理客户档案；一个客户可对应多个网站。</p>
+            <p>
+              <strong>服务开始/结束</strong>
+              ：由下属网站日期自动汇总（最早开始、最晚结束）。
+            </p>
+            <p>
+              <strong>客户分层</strong>：重点 / 正常 / 维护。创建后到网站列表添加域名并「配置对接」。
+            </p>
+          </div>
+        }
+      />
       <ClientList
         initialTier={tier}
         initialQ={q}

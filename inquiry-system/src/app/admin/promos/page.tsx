@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { HelpCallout } from "@/components/HelpCallout";
 import { PromoList } from "@/components/PromoList";
+import { PageHeader } from "@/components/PageHeader";
 
 export default async function PromosPage({
   searchParams,
@@ -29,18 +29,17 @@ export default async function PromosPage({
   const without = clients.filter((c) => !c.promo).map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">信息核对</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">
-          与客户一对一。可新增、查找、编辑；可发送 7 天有效编辑链接给客户（内部备注客户不可见）。
-        </p>
-      </div>
-      <HelpCallout title="说明">
-        <p>
-          三个页签：关键词列表、公司产品要点、广告要点；每个页签另有「内部备注」仅后台可见。详情页可查看历次更新人与时间。
-        </p>
-      </HelpCallout>
+    <div>
+      <PageHeader
+        title="信息核对"
+        hint={
+          <div className="space-y-1.5">
+            <p>与客户一对一。可新增、查找、编辑；可发送 7 天有效编辑链接给客户。</p>
+            <p>三个页签：关键词列表、公司产品要点、广告要点；各页「内部备注」仅后台可见。</p>
+            <p>详情页可查看历次更新人与时间。</p>
+          </div>
+        }
+      />
       <PromoList
         initialQ={q}
         items={promos.map((p) => ({

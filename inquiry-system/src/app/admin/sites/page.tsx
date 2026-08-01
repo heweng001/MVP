@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { SiteList } from "@/components/SiteList";
+import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
 
 export default async function SitesPage({
@@ -39,13 +40,23 @@ export default async function SitesPage({
   });
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">网站列表</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">
-          管理客户下属网站；右侧「配置对接」按步骤安装插件并完成收件配置。
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="网站列表"
+        hint={
+          <div className="space-y-1.5">
+            <p>管理客户下属网站；右侧「配置对接」按步骤安装插件并完成收件配置。</p>
+            <p>
+              保存网站<strong>开始/结束日期</strong>
+              后，客户服务周期自动取所有站中最早开始、最晚结束。
+            </p>
+            <p>
+              <strong>对接状态</strong>
+              ：开启接收插件推送；关闭后拒收并降级走 WPForms 原生邮件。
+            </p>
+          </div>
+        }
+      />
       <SiteList
         ingestUrl={`${appUrl()}/api/ingest`}
         filters={{ clientId, siteType, q, enabled }}

@@ -12,11 +12,11 @@ export default async function PromoPublicPage({ params }: Ctx) {
   const valid = isEditTokenValid(promo.editTokenExpires);
 
   return (
-    <main className="min-h-screen flex items-start justify-center p-6 pt-12">
-      <div className="w-full max-w-2xl">
+    <main className="min-h-screen flex flex-col items-center p-6 pt-12 bg-[var(--bg)]">
+      <div className="w-full max-w-2xl bg-[var(--panel)] border border-[var(--line)] rounded-lg p-6 shadow-sm">
         {!valid ? (
-          <div className="bg-white border border-[var(--line)] rounded-2xl p-8 shadow-sm space-y-2">
-            <h1 className="text-xl font-semibold">链接已失效</h1>
+          <div className="space-y-2">
+            <h1 className="text-xl font-semibold tracking-tight">链接已失效</h1>
             <p className="text-sm text-[var(--muted)]">
               该信息核对编辑链接已超过 7 天有效期，请联系管理员重新发送。
             </p>
@@ -34,6 +34,9 @@ export default async function PromoPublicPage({ params }: Ctx) {
           />
         )}
       </div>
+      <p className="mt-6 text-[11px] text-[var(--muted)]">
+        © {new Date().getFullYear()} 福建贸牛科技股份有限公司 保留所有权利
+      </p>
     </main>
   );
 }

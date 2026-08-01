@@ -4,7 +4,6 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
-import { HelpCallout } from "./HelpCallout";
 
 export type SiteRow = {
   id: string;
@@ -124,21 +123,7 @@ export function SiteList({
 
   return (
     <div className="space-y-4">
-      <HelpCallout title="网站列表说明">
-        <p>
-          一个客户可对应多个网站。保存网站的<strong>开始/结束日期</strong>后，客户的「服务开始/结束」会自动取：所有网站中最早的开始、最晚的结束。
-        </p>
-        <p>
-          <strong>对接状态</strong>：开启后接收该站插件推送；关闭后拒收，询盘降级走 WPForms
-          原生邮件，不进本系统统计。
-        </p>
-        <p>
-          新站接入：点右侧<strong>配置对接</strong>，按清单依次安装插件 → 填写 Site Key →
-          配置收件人。
-        </p>
-      </HelpCallout>
-
-      <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3">
+      <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3 shadow-sm">
         <select
           name="clientId"
           defaultValue={filters.clientId}

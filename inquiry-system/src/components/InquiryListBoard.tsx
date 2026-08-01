@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
+import { PageHeader } from "@/components/PageHeader";
 
 export type InquiryListItem = {
   id: string;
@@ -110,36 +111,34 @@ export function InquiryListBoard({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">询盘列表</h1>
-          <p className="text-xs text-[var(--muted)] mt-0.5">
-            正文过长时鼠标悬停可查看全文。当前页最多 200 条；可多选后批量操作。
-          </p>
-        </div>
-        <form className="flex flex-wrap gap-1.5 items-center text-xs">
-          <input type="hidden" name="tab" value={tab} />
-          <select
-            name="siteId"
-            defaultValue={siteId}
-            className="border border-[var(--line)] rounded px-1.5 py-1 bg-white"
-          >
-            <option value="">全部网站</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.domain}
-              </option>
-            ))}
-          </select>
-          <input
-            name="q"
-            defaultValue={filterQuery}
-            placeholder="搜索姓名/邮箱/电话/正文"
-            className="border border-[var(--line)] rounded px-1.5 py-1 min-w-[160px] bg-white"
-          />
-          <button className="bg-[var(--brand)] text-white rounded px-2.5 py-1">筛选</button>
-        </form>
-      </div>
+      <PageHeader
+        title="询盘列表"
+        hint="正文过长时鼠标悬停可查看全文。当前页最多 200 条；可多选后批量操作。"
+        actions={
+          <form className="flex flex-wrap gap-1.5 items-center text-xs">
+            <input type="hidden" name="tab" value={tab} />
+            <select
+              name="siteId"
+              defaultValue={siteId}
+              className="border border-[var(--line)] rounded-md px-1.5 py-1 bg-white"
+            >
+              <option value="">全部网站</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.domain}
+                </option>
+              ))}
+            </select>
+            <input
+              name="q"
+              defaultValue={filterQuery}
+              placeholder="搜索姓名/邮箱/电话/正文"
+              className="border border-[var(--line)] rounded-md px-1.5 py-1 min-w-[160px] bg-white"
+            />
+            <button className="bg-[var(--brand)] text-white rounded-md px-2.5 py-1">筛选</button>
+          </form>
+        }
+      />
 
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
         {tabs.map((t) => {
@@ -156,16 +155,15 @@ export function InquiryListBoard({
               title={t.hint}
             >
               {t.label}
-              <span className="ml-1">{t.count}</span>
+              <span className="ml-1 tabular-nums">{t.count}</span>
             </Link>
           );
         })}
       </div>
 
-      <div className="rounded-lg border border-teal-200 bg-teal-50/70 px-3 py-2 text-[11px] leading-relaxed text-[#134e4a]">
-        <strong className="font-medium">本页签说明：</strong>
-        {activeHint}
-      </div>
+      {activeHint ? (
+        <p className="text-[11px] text-[var(--muted)] leading-relaxed -mt-1">{activeHint}</p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5 text-xs bg-white border border-[var(--line)] rounded-lg px-2.5 py-2">
         <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
@@ -206,7 +204,7 @@ export function InquiryListBoard({
 
       <div className="bg-white border border-[var(--line)] rounded-lg overflow-x-auto">
         <table className="w-full text-xs min-w-[1000px]">
-          <thead className="bg-black/[0.03] text-left text-[var(--muted)]">
+          <thead className="bg-slate-50 text-left text-[var(--muted)]">
             <tr>
               <th className="px-2 py-1.5 w-8">
                 <input

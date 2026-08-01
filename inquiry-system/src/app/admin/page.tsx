@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { siteMonthStats } from "@/lib/stats";
-import { STATUS_LABELS } from "@/lib/constants";
-import { HelpCallout } from "@/components/HelpCallout";
+import { PageHeader } from "@/components/PageHeader";
 import Link from "next/link";
 
 function pct(n: number) {
@@ -50,57 +49,56 @@ export default async function AdminHome({
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">统计概览</h1>
-          <p className="text-sm text-[var(--muted)] mt-1">
-            有效占比 = (客户标有效 + 超时未标记) / 已转发数 · 时区 Asia/Shanghai
-          </p>
-        </div>
-        <form className="flex gap-2 items-center text-sm">
-          <input
-            name="year"
-            type="number"
-            defaultValue={year}
-            className="w-24 border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
-          />
-          <input
-            name="month"
-            type="number"
-            min={1}
-            max={12}
-            defaultValue={month}
-            className="w-20 border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
-          />
-          <button className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5">查询</button>
-        </form>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="统计概览"
+        hint={
+          <div className="space-y-1.5">
+            <p>有效占比 = (客户标有效 + 超时未标记) / 已转发数 · 时区 Asia/Shanghai</p>
+            <p>
+              <strong>已转发</strong>：已成功发给客户。
+              <strong className="ml-1">有效合计</strong>：客户点「有效」+「超时未标记」（发信后 72
+              小时未点）。
+              <strong className="ml-1">自动拦截</strong>：明显垃圾，未发给客户。
+            </p>
+          </div>
+        }
+        actions={
+          <form className="flex gap-2 items-center text-sm">
+            <input
+              name="year"
+              type="number"
+              defaultValue={year}
+              className="w-24 border border-[var(--line)] rounded-md px-2 py-1.5 bg-white"
+            />
+            <input
+              name="month"
+              type="number"
+              min={1}
+              max={12}
+              defaultValue={month}
+              className="w-20 border border-[var(--line)] rounded-md px-2 py-1.5 bg-white"
+            />
+            <button className="bg-[var(--brand)] text-white rounded-md px-3 py-1.5 text-[13px]">
+              查询
+            </button>
+          </form>
+        }
+      />
 
       {sites.length === 0 ? (
-        <HelpCallout title="还没有接入任何站点">
-          <p>
-            请先创建{" "}
-            <Link href="/admin/clients" className="underline">
-              客户列表
-            </Link>{" "}
-            和{" "}
-            <Link href="/admin/sites" className="underline">
-              网站列表
-            </Link>
-            ，再点网站右侧「配置对接」，按清单步骤安装插件并完成对接。
-          </p>
-        </HelpCallout>
-      ) : (
-        <HelpCallout title="指标说明">
-          <p>
-            <strong>已转发</strong>：已成功发给客户的询盘。
-            <strong className="ml-2">有效合计</strong>：客户点「有效」+「超时未标记」（发信后 72
-            小时未点）。
-            <strong className="ml-2">自动拦截</strong>：明显垃圾，未发给客户。
-          </p>
-        </HelpCallout>
-      )}
+        <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--muted)]">
+          还没有接入任何站点。请先创建{" "}
+          <Link href="/admin/clients" className="text-[var(--brand)] underline underline-offset-2">
+            客户列表
+          </Link>{" "}
+          和{" "}
+          <Link href="/admin/sites" className="text-[var(--brand)] underline underline-offset-2">
+            网站列表
+          </Link>
+          ，再点网站右侧「配置对接」完成对接。
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -120,9 +118,12 @@ export default async function AdminHome({
             value: `${reviewCount}/${pendingCount}`,
           },
         ].map((c) => (
-          <div key={c.label} className="bg-white border border-[var(--line)] rounded-xl p-4">
-            <div className="text-xs text-[var(--muted)]">{c.label}</div>
-            <div className="text-2xl font-semibold mt-1">{c.value}</div>
+          <div
+            key={c.label}
+            className="bg-[var(--panel)] border border-[var(--line)] rounded-lg px-4 py-3 shadow-sm"
+          >
+            <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{c.label}</div>
+            <div className="text-2xl font-semibold tracking-tight mt-1 tabular-nums">{c.value}</div>
             {"sub" in c && c.sub ? (
               <div className="text-xs text-[var(--brand)] mt-1">有效占比 {c.sub}</div>
             ) : null}
@@ -130,23 +131,23 @@ export default async function AdminHome({
         ))}
       </div>
 
-      <div className="bg-white border border-[var(--line)] rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--line)] font-medium">
+      <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-[var(--line)] text-[13px] font-medium">
           {year}年{month}月 · 按站点
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
+            <thead className="bg-slate-50 text-left text-[var(--muted)]">
               <tr>
-                <th className="px-4 py-2">站点</th>
-                <th className="px-4 py-2">客户</th>
-                <th className="px-4 py-2">提交</th>
-                <th className="px-4 py-2">拦截</th>
-                <th className="px-4 py-2">已转发</th>
-                <th className="px-4 py-2">有效</th>
-                <th className="px-4 py-2">超时未标</th>
-                <th className="px-4 py-2">无效</th>
-                <th className="px-4 py-2">有效占比</th>
+                <th className="px-4 py-2.5 font-medium">站点</th>
+                <th className="px-4 py-2.5 font-medium">客户</th>
+                <th className="px-4 py-2.5 font-medium">提交</th>
+                <th className="px-4 py-2.5 font-medium">拦截</th>
+                <th className="px-4 py-2.5 font-medium">已转发</th>
+                <th className="px-4 py-2.5 font-medium">有效</th>
+                <th className="px-4 py-2.5 font-medium">超时未标</th>
+                <th className="px-4 py-2.5 font-medium">无效</th>
+                <th className="px-4 py-2.5 font-medium">有效占比</th>
               </tr>
             </thead>
             <tbody>

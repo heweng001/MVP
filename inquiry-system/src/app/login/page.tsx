@@ -32,35 +32,43 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-md bg-white border border-[var(--line)] rounded-2xl p-8 shadow-sm"
+        className="w-full max-w-sm bg-[var(--panel)] border border-[var(--line)] rounded-lg p-7 shadow-sm"
       >
-        <h1 className="text-2xl font-semibold tracking-tight mb-1">询盘管理系统</h1>
-        <p className="text-[var(--muted)] mb-6 text-sm">服务商管理后台 · 单管理员登录</p>
-        <label className="block text-sm mb-2">用户名</label>
+        <div className="mb-6">
+          <div className="text-[11px] font-medium tracking-wide text-[var(--brand)] uppercase mb-1">
+            贸牛 · SaaS
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight">询盘管理系统</h1>
+          <p className="text-[var(--muted)] mt-1 text-[13px]">服务商管理后台</p>
+        </div>
+        <label className="block text-[13px] mb-1.5 text-[var(--muted)]">用户名</label>
         <input
           name="username"
           required
-          className="w-full border border-[var(--line)] rounded-lg px-3 py-2 mb-4"
+          className="w-full border border-[var(--line)] rounded-md px-3 py-2 mb-3"
           defaultValue="admin"
         />
-        <label className="block text-sm mb-2">密码</label>
+        <label className="block text-[13px] mb-1.5 text-[var(--muted)]">密码</label>
         <input
           name="password"
           type="password"
           required
-          className="w-full border border-[var(--line)] rounded-lg px-3 py-2 mb-4"
+          className="w-full border border-[var(--line)] rounded-md px-3 py-2 mb-4"
         />
         {error ? <p className="text-[var(--danger)] text-sm mb-3">{error}</p> : null}
         <button
           disabled={loading}
-          className="w-full bg-[var(--brand)] text-white rounded-lg py-2.5 font-medium disabled:opacity-60"
+          className="w-full bg-[var(--brand)] text-white rounded-md py-2.5 text-[13px] font-medium disabled:opacity-60"
         >
           {loading ? "登录中…" : "登录"}
         </button>
       </form>
+      <p className="mt-6 text-[11px] text-[var(--muted)]">
+        © {new Date().getFullYear()} 福建贸牛科技股份有限公司 保留所有权利
+      </p>
     </main>
   );
 }

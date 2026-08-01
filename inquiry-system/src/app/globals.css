@@ -1,25 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f4f6f8;
+  --bg: #f1f5f9;
   --panel: #ffffff;
-  --ink: #15202b;
-  --muted: #5b6b7c;
-  --line: #d7dee7;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
   --brand: #0f766e;
-  --brand-ink: #042f2e;
+  --brand-ink: #134e4a;
+  --brand-soft: #ccfbf1;
   --warn: #b45309;
-  --danger: #b91c1c;
+  --danger: #dc2626;
+  --sidebar: #0f172a;
+  --sidebar-muted: #94a3b8;
+  --sidebar-hover: #1e293b;
+  --sidebar-active: #0f766e;
 }
 
 body {
   margin: 0;
   color: var(--ink);
-  background:
-    radial-gradient(1200px 500px at 10% -10%, #d9f3ef 0%, transparent 55%),
-    radial-gradient(900px 400px at 100% 0%, #e8eef7 0%, transparent 50%),
-    var(--bg);
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  font-family: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -32,4 +37,20 @@ textarea,
 select,
 button {
   font: inherit;
+}
+
+/* SaaS 表单控件统一观感 */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  outline-offset: 0;
+  border-color: var(--brand);
 }

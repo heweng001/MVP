@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PromoEditor } from "@/components/PromoEditor";
+import { PageHeader } from "@/components/PageHeader";
 import { promoEditUrl } from "@/lib/promo";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -25,10 +26,18 @@ export default async function PromoDetailPage({ params }: Ctx) {
   return (
     <div className="space-y-4">
       <div>
-        <Link href="/admin/promos" className="text-sm text-[var(--brand)] hover:underline">
+        <Link
+          href="/admin/promos"
+          className="text-[13px] text-[var(--brand)] hover:underline underline-offset-2"
+        >
           ← 信息核对列表
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">信息核对详情</h1>
+        <div className="mt-2 -mb-2">
+          <PageHeader
+            title="信息核对详情"
+            hint={`客户：${item.client.name}。可编辑三页签内容并发送 7 天有效编辑链接；内部备注仅后台可见。`}
+          />
+        </div>
       </div>
       <PromoEditor
         defaultEmail=""
