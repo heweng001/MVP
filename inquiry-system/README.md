@@ -42,6 +42,19 @@ curl -X POST "https://你的域名/api/cron" -H "x-cron-secret: 你的CRON_SECRE
 有效占比   = 有效询盘数 / 已转发数
 ```
 
+## 生产部署
+
+Node + systemd + Nginx（不用 Docker）。线上：https://mvp.maoniux.com  
+
+详见 [`../docs/部署到阿里云.md`](../docs/部署到阿里云.md)。日常更新：
+
+```bash
+cd /opt/inquiry/repo && git pull
+cd inquiry-system
+npm ci && npx prisma db push && npm run build
+systemctl restart inquiry-system
+```
+
 ## 目录
 
 | 路径 | 说明 |

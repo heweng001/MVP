@@ -1,0 +1,16 @@
+[Unit]
+Description=Inquiry Management System
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/inquiry/repo/inquiry-system
+Environment=NODE_ENV=production
+Environment=PORT=3001
+EnvironmentFile=/opt/inquiry/repo/inquiry-system/.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

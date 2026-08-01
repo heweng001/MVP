@@ -9,7 +9,7 @@ WordPress（WPForms Pro）询盘接入、垃圾过滤、客户邮件标记与月
 | `inquiry-system/` | Next.js 中心系统（管理后台 + API） |
 | `wp-inquiry-bridge/` | WordPress 对接插件 |
 | `docs/` | 需求与部署文档 |
-| `deploy/` | 服务器部署脚本 |
+| `deploy/` | systemd 服务单元示例 |
 
 ## 本地开发
 
@@ -25,10 +25,7 @@ npm run dev
 
 ## 生产部署
 
-见 [docs/部署到阿里云.md](docs/部署到阿里云.md)。
+**Node + systemd + Nginx**（不用 Docker）。  
+线上：https://mvp.maoniux.com  
 
-简要：`inquiry-system` 目录下配置 `.env.production` 后执行：
-
-```bash
-docker compose up -d --build
-```
+详见 [docs/部署到阿里云.md](docs/部署到阿里云.md)。
