@@ -1,27 +1,19 @@
 import nodemailer from "nodemailer";
 import { appUrl } from "./constants";
+import { getSmtpConfig, isSmtpReady, type SmtpConfig } from "./settings";
 
-function smtpConfigured() {
-  const host = (process.env.SMTP_HOST || "").trim();
-  if (!host) return false;
-  if (/example\.com$/i.test(host)) return false;
-  return true;
-}
-
-function transporter() {
-  if (!smtpConfigured()) return null;
-  const host = process.env.SMTP_HOST as string;
+function transporterFrom(cfg: SmtpConfig) {
+  if (!isSmtpReady(cfg)) return null;
   return nodemailer.createTransport({
-    host,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth:
-      process.env.SMTP_USER
-        ? {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS || "",
-          }
-        : undefined,
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    auth: cfg.user
+      ? {
+          user: cfg.user,
+          pass: cfg.pass || "",
+        }
+      : undefined,
   });
 }
 
@@ -56,7 +48,8 @@ export function parseEmails(toEmails: string, ccEmails = "") {
 }
 
 export async function sendInquiryEmail(payload: InquiryMailPayload) {
-  const transport = transporter();
+  const cfg = await getSmtpConfig();
+  const transport = transporterFrom(cfg);
   const markBase = `${appUrl()}/m/${payload.markToken}`;
   const validUrl = `${markBase}?a=valid`;
   const invalidUrl = `${markBase}?a=invalid`;
@@ -96,7 +89,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   ].join("\n");
 
   if (!transport) {
-    console.warn("[email] SMTP not configured; skipping send (dev mode)");
+    console.warn("[email] SMTP not configured; skipping send");
     console.info("[email] valid:", validUrl, "invalid:", invalidUrl);
     return { ok: true as const, skipped: true };
   }
@@ -106,7 +99,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   }
 
   await transport.sendMail({
-    from: process.env.SMTP_FROM || "noreply@example.com",
+    from: cfg.from || cfg.user || "noreply@example.com",
     to: payload.to.join(", "),
     cc: payload.cc?.length ? payload.cc.join(", ") : undefined,
     replyTo: payload.email || undefined,
@@ -116,6 +109,26 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   });
 
   return { ok: true as const, skipped: false };
+}
+
+export async function sendTestEmail(to: string) {
+  const cfg = await getSmtpConfig();
+  const transport = transporterFrom(cfg);
+  if (!transport) {
+    throw new Error("请先保存有效的 SMTP 主机等配置");
+  }
+  const dest = to.trim();
+  if (!dest || !dest.includes("@")) {
+    throw new Error("请填写有效的测试收件邮箱");
+  }
+  await transport.sendMail({
+    from: cfg.from || cfg.user || "noreply@example.com",
+    to: dest,
+    subject: "【询盘系统】发件测试",
+    text: "这是一封测试邮件。若能收到，说明发件邮箱配置正确。",
+    html: "<p>这是一封测试邮件。若能收到，说明发件邮箱配置正确。</p>",
+  });
+  return { ok: true as const };
 }
 
 function escapeHtml(s: string) {

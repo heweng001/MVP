@@ -61,7 +61,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   if (!inquiry) throw new Error("Inquiry not found");
 
   const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
-  await sendInquiryEmail({
+  const sent = await sendInquiryEmail({
     to: recipients.to,
     cc: recipients.cc,
     siteName: inquiry.site.domain,
@@ -76,6 +76,9 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     formId: inquiry.formId,
     entryId: inquiry.entryId,
   });
+  if (sent.skipped) {
+    throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");
+  }
 
   return prisma.inquiry.update({
     where: { id: inquiryId },

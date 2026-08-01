@@ -136,8 +136,10 @@ export default function GuidePage() {
         <h2 className="text-lg font-semibold">6. 邮件与定时任务（上线必做）</h2>
         <ul className="list-disc pl-5 text-sm space-y-2 leading-relaxed">
           <li>
-            在服务器 <code className="bg-black/5 px-1 rounded">.env</code> 配置真实 SMTP（服务商域名发信），以及{" "}
-            <code className="bg-black/5 px-1 rounded">APP_URL</code>（公网可访问地址，否则客户邮件里的标记链接会错）。
+            在后台 <strong>发件设置</strong> 配置 SMTP 与发件人 From（也可用服务器{" "}
+            <code className="bg-black/5 px-1 rounded">.env</code> 作未保存时的回退）。确保{" "}
+            <code className="bg-black/5 px-1 rounded">APP_URL</code>{" "}
+            为公网地址，否则客户邮件里的标记链接会错。
           </li>
           <li>
             建议每 5～15 分钟调用一次定时接口（处理「待审超时自动发」「72 小时超时未标记」）：
