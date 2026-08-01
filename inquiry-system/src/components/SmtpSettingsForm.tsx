@@ -132,6 +132,9 @@ export function SmtpSettingsForm({ initial }: Props) {
             <span>SSL/TLS（secure）</span>
           </label>
         </div>
+        <p className="text-xs text-[var(--muted)] -mt-2">
+          常用：587 不勾选（STARTTLS）；465 勾选 SSL。端口与勾选不一致会导致 wrong version number。
+        </p>
 
         <label className="block text-sm space-y-1">
           <span>SMTP 账号</span>

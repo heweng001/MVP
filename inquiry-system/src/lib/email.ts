@@ -10,6 +10,18 @@ async function resolveIpv4Host(hostname: string) {
   return address;
 }
 
+/** 避免 587+SSL / 465+明文 这类组合触发 wrong version number */
+function normalizeTlsMode(cfg: SmtpConfig) {
+  const port = cfg.port || 587;
+  if (port === 465) {
+    return { port, secure: true, requireTLS: false };
+  }
+  if (port === 587 || port === 25) {
+    return { port, secure: false, requireTLS: true };
+  }
+  return { port, secure: cfg.secure, requireTLS: !cfg.secure };
+}
+
 async function transporterFrom(cfg: SmtpConfig) {
   if (!isSmtpReady(cfg)) return null;
   let host = cfg.host;
@@ -19,13 +31,14 @@ async function transporterFrom(cfg: SmtpConfig) {
     console.error("[email] IPv4 DNS lookup failed for", cfg.host, e);
     throw new Error(`无法解析 SMTP 主机的 IPv4 地址：${cfg.host}`);
   }
+  const mode = normalizeTlsMode(cfg);
   const options = {
     host,
-    port: cfg.port,
-    secure: cfg.secure,
+    port: mode.port,
+    secure: mode.secure,
     // 用 IP 连接时保留原主机名给 TLS/SNI
     servername: cfg.host,
-    requireTLS: !cfg.secure && cfg.port === 587,
+    requireTLS: mode.requireTLS,
     tls: { servername: cfg.host },
     auth: cfg.user
       ? {
