@@ -106,9 +106,12 @@ export function SmtpSettingsForm({ initial }: Props) {
             required
             value={host}
             onChange={(e) => setHost(e.target.value)}
-            placeholder="smtp.example.com"
+            placeholder="smtp.example.com（只填主机名，不要粘贴整段配置）"
             className="w-full border border-[var(--line)] rounded-lg px-3 py-2"
           />
+          <span className="text-xs text-[var(--muted)]">
+            示例：smtp.exmail.qq.com / smtp.qiye.aliyun.com，不要填端口或账号。
+          </span>
         </label>
 
         <div className="grid grid-cols-2 gap-3">

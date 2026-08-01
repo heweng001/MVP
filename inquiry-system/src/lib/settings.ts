@@ -44,6 +44,16 @@ function normalizeSmtp(raw?: Partial<SmtpConfig> | null): SmtpConfig {
   };
 }
 
+/** 拒绝把多行 .env 粘进主机字段 / 引号未闭合污染后的值 */
+export function validateSmtpHost(host: string): string | null {
+  const h = host.trim();
+  if (!h) return "请填写 SMTP 主机";
+  if (/[\r\n]/.test(h) || /\s/.test(h)) return "SMTP 主机不能含空格或换行，只填主机名，如 smtp.example.com";
+  if (/=/.test(h) || /SMTP_/i.test(h)) return "SMTP 主机格式不正确，请只填写主机名（不要粘贴整段环境变量）";
+  if (!/^[A-Za-z0-9.-]+$/.test(h)) return "SMTP 主机只能包含字母、数字、点、连字符";
+  return null;
+}
+
 async function readSettings(): Promise<AppSettingsValue> {
   const row = await prisma.appSetting.findUnique({ where: { id: "default" } });
   if (!row?.value) return {};
@@ -66,24 +76,34 @@ async function writeSettings(next: AppSettingsValue) {
 export async function getSmtpConfig(): Promise<SmtpConfig> {
   const settings = await readSettings();
   const db = normalizeSmtp(settings.smtp);
-  if (db.host) return db;
-  return normalizeSmtp(envSmtp());
+  if (db.host && !validateSmtpHost(db.host)) return db;
+  const env = normalizeSmtp(envSmtp());
+  if (env.host && !validateSmtpHost(env.host)) return env;
+  return { ...DEFAULT_SMTP };
 }
 
 export function isSmtpReady(cfg: SmtpConfig) {
   if (!cfg.host.trim()) return false;
+  if (validateSmtpHost(cfg.host)) return false;
   if (/example\.com$/i.test(cfg.host)) return false;
   return true;
+}
+
+function sanitizeHostForForm(host: string) {
+  if (!host) return "";
+  return validateSmtpHost(host) ? "" : host;
 }
 
 export async function getSmtpConfigForAdmin() {
   const settings = await readSettings();
   const db = normalizeSmtp(settings.smtp);
   const env = normalizeSmtp(envSmtp());
-  const effective = db.host ? db : env;
-  const source: "database" | "env" | "none" = db.host
+  const dbHostOk = Boolean(db.host) && !validateSmtpHost(db.host);
+  const envHostOk = Boolean(env.host) && !validateSmtpHost(env.host);
+  const effective = dbHostOk ? db : envHostOk ? env : { ...DEFAULT_SMTP, ...db, host: "" };
+  const source: "database" | "env" | "none" = dbHostOk
     ? "database"
-    : env.host
+    : envHostOk
       ? "env"
       : "none";
 
@@ -94,13 +114,13 @@ export async function getSmtpConfigForAdmin() {
     user: effective.user,
     from: effective.from,
     hasPassword: Boolean(effective.pass),
-    configured: isSmtpReady(effective),
+    configured: isSmtpReady(effective) && source !== "none",
     source,
     /** 表单里展示的是库内值；未保存过时用 env 预填便于迁移 */
     form: {
-      host: db.host || env.host,
+      host: sanitizeHostForForm(db.host) || sanitizeHostForForm(env.host),
       port: db.port || env.port || 587,
-      secure: db.host ? db.secure : env.secure,
+      secure: dbHostOk ? db.secure : env.secure,
       user: db.user || env.user,
       from: db.from || env.from,
     },

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { getSmtpConfigForAdmin, saveSmtpConfig } from "@/lib/settings";
+import { getSmtpConfigForAdmin, saveSmtpConfig, validateSmtpHost } from "@/lib/settings";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -16,8 +16,9 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const host = String(body.host || "").trim();
   const from = String(body.from || "").trim();
-  if (!host) {
-    return NextResponse.json({ error: "请填写 SMTP 主机" }, { status: 400 });
+  const hostErr = validateSmtpHost(host);
+  if (hostErr) {
+    return NextResponse.json({ error: hostErr }, { status: 400 });
   }
   if (!from) {
     return NextResponse.json({ error: "请填写发件人（From）" }, { status: 400 });
