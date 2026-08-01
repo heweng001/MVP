@@ -19,14 +19,14 @@ export default async function PromosPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">主推信息</h1>
+        <h1 className="text-2xl font-semibold">信息核对</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          与客户一对一。可在此编辑，或发送 7 天有效编辑链接给客户自行填写。
+          与客户一对一。可增删改查；可发送 7 天有效编辑链接给客户自行填写（内部备注客户不可见）。
         </p>
       </div>
       <HelpCallout title="说明">
         <p>
-          含三个页签：关键词列表、公司产品要点、广告要点。客户通过链接提交时须填写姓名；列表显示最近提交人与时间。
+          三个页签：关键词列表、公司产品要点、广告要点；每个页签另有「内部备注」仅后台可见。详情页可查看历次更新人与时间。
         </p>
       </HelpCallout>
       <PromoList

@@ -33,23 +33,41 @@ model Client {
   promo        ClientPromo?
 }
 
-/// 客户主推信息（与客户一对一）
+/// 客户信息核对（与客户一对一）
 model ClientPromo {
   id               String    @id @default(cuid())
   clientId         String    @unique
   client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  /// 关键词列表
+  /// 关键词列表（客户可见）
   keywords         String    @default("")
-  /// 公司产品要点
+  /// 关键词内部备注（仅后台）
+  keywordsNote     String    @default("")
+  /// 公司产品要点（客户可见）
   productPoints    String    @default("")
-  /// 广告要点
+  /// 产品要点内部备注（仅后台）
+  productPointsNote String   @default("")
+  /// 广告要点（客户可见）
   adPoints         String    @default("")
+  /// 广告要点内部备注（仅后台）
+  adPointsNote     String    @default("")
   editToken        String?   @unique
   editTokenExpires DateTime?
   lastSubmittedBy  String    @default("")
   lastSubmittedAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  histories        ClientPromoHistory[]
+}
+
+/// 信息核对更新记录
+model ClientPromoHistory {
+  id          String      @id @default(cuid())
+  promoId     String
+  promo       ClientPromo @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  submittedBy String
+  createdAt   DateTime    @default(now())
+
+  @@index([promoId, createdAt])
 }
 
 model Site {

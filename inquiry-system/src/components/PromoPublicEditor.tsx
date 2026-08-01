@@ -72,7 +72,7 @@ export function PromoPublicEditor({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">填写主推信息</h1>
+        <h1 className="text-xl font-semibold">填写信息核对</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
           客户：{clientName}
           {expiresAt ? (

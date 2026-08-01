@@ -10,7 +10,10 @@ export default async function PromoDetailPage({ params }: Ctx) {
   const { id } = await params;
   const item = await prisma.clientPromo.findUnique({
     where: { id },
-    include: { client: true },
+    include: {
+      client: true,
+      histories: { orderBy: { createdAt: "desc" }, take: 100 },
+    },
   });
   if (!item) notFound();
 
@@ -23,9 +26,9 @@ export default async function PromoDetailPage({ params }: Ctx) {
     <div className="space-y-4">
       <div>
         <Link href="/admin/promos" className="text-sm text-[var(--brand)] hover:underline">
-          ← 主推信息列表
+          ← 信息核对列表
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">编辑主推信息</h1>
+        <h1 className="text-2xl font-semibold mt-2">信息核对详情</h1>
       </div>
       <PromoEditor
         defaultEmail=""
@@ -34,11 +37,19 @@ export default async function PromoDetailPage({ params }: Ctx) {
           keywords: item.keywords,
           productPoints: item.productPoints,
           adPoints: item.adPoints,
+          keywordsNote: item.keywordsNote,
+          productPointsNote: item.productPointsNote,
+          adPointsNote: item.adPointsNote,
           lastSubmittedBy: item.lastSubmittedBy,
           lastSubmittedAt: item.lastSubmittedAt?.toISOString() ?? null,
           editTokenExpires: linkValid ? item.editTokenExpires!.toISOString() : null,
           editUrl: linkValid && item.editToken ? promoEditUrl(item.editToken) : null,
           client: { id: item.client.id, name: item.client.name },
+          histories: item.histories.map((h) => ({
+            id: h.id,
+            submittedBy: h.submittedBy,
+            createdAt: h.createdAt.toISOString(),
+          })),
         }}
       />
     </div>

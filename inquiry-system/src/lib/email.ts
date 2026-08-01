@@ -180,16 +180,16 @@ export async function sendPromoEditLink(opts: {
     throw new Error("请填写有效的收件邮箱");
   }
   const exp = opts.expiresAt.toLocaleString("zh-CN", { hour12: false });
-  const subject = `【主推信息】请填写/更新「${opts.clientName}」的主推内容`;
+  const subject = `【信息核对】请填写/更新「${opts.clientName}」的核对内容`;
   const text = [
-    `您好，请通过以下链接填写或更新「${opts.clientName}」的主推信息：`,
+    `您好，请通过以下链接填写或更新「${opts.clientName}」的信息核对：`,
     opts.editUrl,
     "",
     `链接有效期至：${exp}（7 天内）。提交时请填写您的姓名。`,
   ].join("\n");
   const html = `
     <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
-      <p>您好，请通过以下链接填写或更新「<strong>${escapeHtml(opts.clientName)}</strong>」的主推信息：</p>
+      <p>您好，请通过以下链接填写或更新「<strong>${escapeHtml(opts.clientName)}</strong>」的信息核对：</p>
       <p><a href="${escapeHtml(opts.editUrl)}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">打开编辑页</a></p>
       <p style="color:#666;font-size:12px;">或复制链接：${escapeHtml(opts.editUrl)}</p>
       <p style="color:#888;font-size:12px;">链接有效期至 ${escapeHtml(exp)}（7 天内）。提交时请填写您的姓名。</p>

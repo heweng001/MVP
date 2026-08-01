@@ -18,7 +18,7 @@ export default async function PromoPublicPage({ params }: Ctx) {
           <div className="bg-white border border-[var(--line)] rounded-2xl p-8 shadow-sm space-y-2">
             <h1 className="text-xl font-semibold">链接已失效</h1>
             <p className="text-sm text-[var(--muted)]">
-              该编辑链接已超过 7 天有效期，请联系管理员重新发送。
+              该信息核对编辑链接已超过 7 天有效期，请联系管理员重新发送。
             </p>
           </div>
         ) : (

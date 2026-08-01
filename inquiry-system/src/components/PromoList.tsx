@@ -44,12 +44,24 @@ export function PromoList({
     router.refresh();
   }
 
+  async function remove(id: string, name: string) {
+    if (!confirm(`确认删除「${name}」的信息核对？`)) return;
+    setBusy(true);
+    const res = await fetch(`/api/admin/promos/${id}`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) {
+      setErr("删除失败");
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <div className="space-y-4">
       {clientsWithoutPromo.length > 0 ? (
         <div className="bg-white border border-[var(--line)] rounded-xl p-3 flex flex-wrap gap-2 items-end">
           <label className="text-sm flex-1 min-w-[200px]">
-            <span className="text-xs text-[var(--muted)]">为客户创建主推信息</span>
+            <span className="text-xs text-[var(--muted)]">新增信息核对</span>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
@@ -79,8 +91,8 @@ export function PromoList({
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">客户</th>
-              <th className="px-3 py-2">最近提交人</th>
-              <th className="px-3 py-2">最近提交时间</th>
+              <th className="px-3 py-2">最近更新人</th>
+              <th className="px-3 py-2">最近更新时间</th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>
@@ -88,7 +100,7 @@ export function PromoList({
             {items.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-3 py-10 text-center text-[var(--muted)]">
-                  暂无主推信息。请先选择客户创建。
+                  暂无信息核对记录。请先选择客户创建。
                 </td>
               </tr>
             ) : (
@@ -99,13 +111,21 @@ export function PromoList({
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatDateTime(row.lastSubmittedAt)}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-right whitespace-nowrap space-x-3">
                     <Link
                       href={`/admin/promos/${row.id}`}
                       className="text-[var(--brand)] hover:underline"
                     >
-                      编辑
+                      查看/编辑
                     </Link>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => remove(row.id, row.client.name)}
+                      className="text-[var(--danger)] hover:underline disabled:opacity-50"
+                    >
+                      删除
+                    </button>
                   </td>
                 </tr>
               ))

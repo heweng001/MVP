@@ -5,6 +5,7 @@ import {
   editLinkExpiresAt,
   newEditToken,
   promoEditUrl,
+  recordPromoHistory,
 } from "@/lib/promo";
 import { sendPromoEditLink } from "@/lib/email";
 
@@ -16,7 +17,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const item = await prisma.clientPromo.findUnique({
     where: { id },
-    include: { client: true },
+    include: {
+      client: true,
+      histories: { orderBy: { createdAt: "desc" }, take: 100 },
+    },
   });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({
@@ -36,37 +40,43 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
 
-  const data: {
-    keywords?: string;
-    productPoints?: string;
-    adPoints?: string;
-    lastSubmittedBy?: string;
-    lastSubmittedAt?: Date;
-  } = {};
-
+  const data: Record<string, string> = {};
   if (body.keywords !== undefined) data.keywords = String(body.keywords);
   if (body.productPoints !== undefined) data.productPoints = String(body.productPoints);
   if (body.adPoints !== undefined) data.adPoints = String(body.adPoints);
-
-  // 管理员保存也记一条最近提交（可选姓名，默认「管理员」）
-  if (body.asSubmit !== false) {
-    data.lastSubmittedBy = String(body.submitterName || "管理员").trim() || "管理员";
-    data.lastSubmittedAt = new Date();
+  if (body.keywordsNote !== undefined) data.keywordsNote = String(body.keywordsNote);
+  if (body.productPointsNote !== undefined) {
+    data.productPointsNote = String(body.productPointsNote);
   }
+  if (body.adPointsNote !== undefined) data.adPointsNote = String(body.adPointsNote);
+
+  const submitter = String(body.submitterName || "管理员").trim() || "管理员";
 
   try {
     const item = await prisma.clientPromo.update({
       where: { id },
       data,
-      include: { client: true },
+      include: {
+        client: true,
+        histories: { orderBy: { createdAt: "desc" }, take: 100 },
+      },
     });
-    return NextResponse.json({ item });
+    if (body.asSubmit !== false) {
+      await recordPromoHistory(id, submitter);
+    }
+    const fresh = await prisma.clientPromo.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        histories: { orderBy: { createdAt: "desc" }, take: 100 },
+      },
+    });
+    return NextResponse.json({ item: fresh || item });
   } catch {
     return NextResponse.json({ error: "保存失败" }, { status: 404 });
   }
 }
 
-/** 生成 7 天编辑链接；可选发信 */
 export async function POST(req: NextRequest, ctx: Ctx) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

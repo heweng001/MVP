@@ -158,7 +158,7 @@ export function ClientList({
               <th className="px-3 py-2">服务开始</th>
               <th className="px-3 py-2">服务结束</th>
               <th className="px-3 py-2">最近上门</th>
-              <th className="px-3 py-2">主推信息</th>
+              <th className="px-3 py-2">信息核对</th>
               <th className="px-3 py-2">备注</th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
@@ -202,14 +202,15 @@ export function ClientList({
                     {c.promo ? (
                       <Link
                         href={`/admin/promos/${c.promo.id}`}
-                        className="text-[11px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 hover:bg-sky-200 whitespace-nowrap"
-                        title={
-                          c.promo.lastSubmittedBy
-                            ? `最近：${c.promo.lastSubmittedBy}`
-                            : "查看主推信息"
-                        }
+                        className="text-sky-800 hover:underline whitespace-nowrap"
+                        title="查看信息核对详情"
                       >
-                        主推信息
+                        {c.promo.lastSubmittedBy || "未更新"}
+                        {c.promo.lastSubmittedAt ? (
+                          <span className="text-[var(--muted)] ml-1 text-xs">
+                            {formatDate(c.promo.lastSubmittedAt)}
+                          </span>
+                        ) : null}
                       </Link>
                     ) : (
                       <span className="text-[var(--muted)]">—</span>

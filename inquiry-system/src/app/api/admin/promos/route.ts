@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-/** 列表：已有主推信息的客户 */
+/** 列表：已有信息核对的客户 */
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +16,7 @@ export async function GET() {
   return NextResponse.json({ items });
 }
 
-/** 为客户创建空主推信息（一对一） */
+/** 为客户创建空信息核对（一对一） */
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
