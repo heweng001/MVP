@@ -132,10 +132,3 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   return NextResponse.json({ error: "unknown action" }, { status: 400 });
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await ctx.params;
-  await prisma.clientPromo.delete({ where: { id } }).catch(() => null);
-  return NextResponse.json({ ok: true });
-}

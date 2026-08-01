@@ -2,9 +2,21 @@ import { prisma } from "@/lib/prisma";
 import { HelpCallout } from "@/components/HelpCallout";
 import { PromoList } from "@/components/PromoList";
 
-export default async function PromosPage() {
+export default async function PromosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const sp = await searchParams;
+  const q = (sp.q || "").trim();
+
   const [promos, clients] = await Promise.all([
     prisma.clientPromo.findMany({
+      where: q
+        ? {
+            client: { name: { contains: q } },
+          }
+        : undefined,
       orderBy: { updatedAt: "desc" },
       include: { client: { select: { id: true, name: true, tier: true } } },
     }),
@@ -21,7 +33,7 @@ export default async function PromosPage() {
       <div>
         <h1 className="text-2xl font-semibold">信息核对</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          与客户一对一。可增删改查；可发送 7 天有效编辑链接给客户自行填写（内部备注客户不可见）。
+          与客户一对一。可新增、查找、编辑；可发送 7 天有效编辑链接给客户（内部备注客户不可见）。
         </p>
       </div>
       <HelpCallout title="说明">
@@ -30,6 +42,7 @@ export default async function PromosPage() {
         </p>
       </HelpCallout>
       <PromoList
+        initialQ={q}
         items={promos.map((p) => ({
           id: p.id,
           lastSubmittedBy: p.lastSubmittedBy,

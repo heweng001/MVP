@@ -149,40 +149,17 @@ export function PromoEditor({
     }
   }
 
-  async function remove() {
-    if (!confirm(`确认删除「${initial.client.name}」的信息核对？`)) return;
-    setBusy(true);
-    const res = await fetch(`/api/admin/promos/${initial.id}`, { method: "DELETE" });
-    setBusy(false);
-    if (!res.ok) {
-      setErr("删除失败");
-      return;
-    }
-    router.push("/admin/promos");
-    router.refresh();
-  }
-
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--muted)]">
-        <div>
-          客户：<strong className="text-[var(--ink)]">{initial.client.name}</strong>
-          {lastBy || lastAt ? (
-            <span className="ml-3">
-              最近更新：{lastBy || "—"} · {formatDateTime(lastAt)}
-            </span>
-          ) : (
-            <span className="ml-3">尚未有人更新</span>
-          )}
-        </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={remove}
-          className="text-[var(--danger)] text-sm hover:underline disabled:opacity-50"
-        >
-          删除本条
-        </button>
+      <div className="text-sm text-[var(--muted)]">
+        客户：<strong className="text-[var(--ink)]">{initial.client.name}</strong>
+        {lastBy || lastAt ? (
+          <span className="ml-3">
+            最近更新：{lastBy || "—"} · {formatDateTime(lastAt)}
+          </span>
+        ) : (
+          <span className="ml-3">尚未有人更新</span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
