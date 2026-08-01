@@ -58,8 +58,8 @@ export default function GuidePage() {
             <li>每个站点一把 key，不要多站共用。</li>
             <li>相当于密码，不要发到公开网页或发给不相干的人。</li>
             <li>
-              在「网站列表」点「配置表单」可复制；填到 WordPress 后台{" "}
-              <strong>设置 → Inquiry Bridge → Site Key</strong>。
+              在「网站列表」点「配置表单」可复制；填到该站 WordPress 后台{" "}
+              <strong>设置 → 询盘对接 → Site Key</strong>。
             </li>
           </ul>
         </div>
@@ -72,14 +72,22 @@ export default function GuidePage() {
 
       <section className="bg-white border border-[var(--line)] rounded-xl p-5 space-y-3">
         <h2 className="text-lg font-semibold">3. 安装 WordPress 插件</h2>
+        <p className="text-sm text-[var(--muted)] leading-relaxed">
+          注意：插件装在<strong>各客户 WordPress 网站</strong>上，不在本询盘系统（mvp.maoniux.com）里。未安装/未启用时，WP 后台不会出现「询盘对接」菜单。
+        </p>
         <ol className="list-decimal pl-5 space-y-2 text-sm leading-relaxed">
           <li>
             将项目里的文件夹 <code className="bg-black/5 px-1 rounded">wp-inquiry-bridge</code>{" "}
-            复制到网站的 <code className="bg-black/5 px-1 rounded">wp-content/plugins/</code>。
+            整夹复制到该网站的{" "}
+            <code className="bg-black/5 px-1 rounded">wp-content/plugins/wp-inquiry-bridge/</code>
+            （需含 <code className="bg-black/5 px-1 rounded">inquiry-bridge.php</code>）。
           </li>
-          <li>在 WordPress 后台启用插件 <strong>Inquiry Bridge for WPForms</strong>。</li>
           <li>
-            打开 <strong>设置 → Inquiry Bridge</strong>，填写：
+            登录该站 WordPress 后台 → <strong>插件</strong>，启用{" "}
+            <strong>Inquiry Bridge for WPForms</strong>（需已安装 WPForms Pro）。
+          </li>
+          <li>
+            打开左侧 <strong>设置 → 询盘对接</strong>（英文界面为 Settings → Inquiry Bridge），填写：
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>
                 <strong>API URL</strong>：上面的接收地址（以 <code>/api/ingest</code> 结尾）

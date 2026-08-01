@@ -51,8 +51,8 @@ final class Inquiry_Bridge_Plugin
     public static function admin_menu()
     {
         add_options_page(
-            'Inquiry Bridge',
-            'Inquiry Bridge',
+            '询盘对接 Inquiry Bridge',
+            '询盘对接',
             'manage_options',
             'inquiry-bridge',
             [__CLASS__, 'render_settings']
