@@ -129,12 +129,12 @@ export function SiteList({
           一个客户可对应多个网站。保存网站的<strong>开始/结束日期</strong>后，客户的「服务开始/结束」会自动取：所有网站中最早的开始、最晚的结束。
         </p>
         <p>
-          <strong>对接状态</strong>：开启后，WordPress 插件可用该站 site_key
-          把询盘推送到本系统（过滤、代发、统计）；关闭后本系统拒收该站推送，询盘会降级走
-          WPForms 原生邮件，不再进入本系统统计。
+          <strong>对接状态</strong>：开启后接收该站插件推送；关闭后拒收，询盘降级走 WPForms
+          原生邮件，不进本系统统计。
         </p>
         <p>
-          右侧「配置表单」用于复制 site_key、配置收件人等，不在本列表里直接改密钥。
+          新站接入：点右侧<strong>配置表单</strong>，按清单依次安装插件 → 填写 Site Key →
+          配置收件人。
         </p>
       </HelpCallout>
 
@@ -263,7 +263,7 @@ export function SiteList({
                       className="text-[var(--brand)] font-medium"
                       onClick={() => setConfigSite(s)}
                     >
-                      配置表单
+                      配置对接
                     </button>
                     <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
                       编辑

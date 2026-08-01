@@ -44,7 +44,7 @@ export default async function ClientsPage({
           由下属网站自动计算（所有网站中最早开始、最晚结束），请在「网站列表」维护各站日期。
         </p>
         <p>
-          <strong>客户分层</strong>：重点 / 正常 / 维护。创建客户后，再到网站列表添加域名并配置表单对接。
+          <strong>客户分层</strong>：重点 / 正常 / 维护。创建客户后，再到网站列表添加域名，点「配置对接」按清单接入。
         </p>
       </HelpCallout>
       <ClientList

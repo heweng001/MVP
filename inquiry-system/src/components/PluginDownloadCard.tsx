@@ -32,24 +32,18 @@ export function PluginDownloadCard() {
   }
 
   return (
-    <div className="rounded-xl border border-[var(--brand)]/25 bg-[var(--brand)]/5 p-4 space-y-3">
-      <div className="text-sm font-medium">下载 WordPress 插件包</div>
-      <p className="text-sm text-[var(--muted)] leading-relaxed">
-        下载后解压，将文件夹 <code className="bg-black/5 px-1 rounded">wp-inquiry-bridge</code>{" "}
-        上传到目标网站服务器的：
-      </p>
-      <code className="block text-xs sm:text-sm bg-white border border-[var(--line)] rounded-lg px-3 py-2 break-all">
-        wp-content/plugins/wp-inquiry-bridge/
-      </code>
+    <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
       <p className="text-xs text-[var(--muted)] leading-relaxed">
-        解压后目录内应能看到 <code className="bg-black/5 px-1 rounded">inquiry-bridge.php</code>
-        。也可用 WordPress 后台「插件 → 安装插件 → 上传插件」直接上传本 zip（需支持 zip 安装）。
+        下载后解压，将 <code className="bg-black/5 px-1 rounded">wp-inquiry-bridge</code>{" "}
+        放到目标站{" "}
+        <code className="bg-black/5 px-1 rounded">wp-content/plugins/wp-inquiry-bridge/</code>
+        ；或 WP 后台「插件 → 上传插件」直接上传 zip。
       </p>
       <button
         type="button"
         disabled={busy}
         onClick={download}
-        className="bg-[var(--brand)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+        className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
       >
         {busy ? "正在打包…" : "下载 wp-inquiry-bridge.zip"}
       </button>

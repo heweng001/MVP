@@ -43,7 +43,7 @@ export default async function SitesPage({
       <div>
         <h1 className="text-2xl font-semibold">网站列表</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          管理客户下属网站；右侧「配置表单」进行 site_key 与收件配置。
+          管理客户下属网站；右侧「配置对接」按步骤安装插件并完成收件配置。
         </p>
       </div>
       <SiteList

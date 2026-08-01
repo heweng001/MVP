@@ -88,15 +88,11 @@ export default async function AdminHome({
             <Link href="/admin/sites" className="underline">
               网站列表
             </Link>
-            ，再在网站右侧「配置表单」拿到 site_key，按{" "}
-            <Link href="/admin/guide" className="underline">
-              接入说明
-            </Link>{" "}
-            配置 WordPress 插件。
+            ，再点网站右侧「配置对接」，按清单步骤安装插件并完成对接。
           </p>
         </HelpCallout>
       ) : (
-        <HelpCallout title="指标说明" guideHref={null}>
+        <HelpCallout title="指标说明">
           <p>
             <strong>已转发</strong>：已成功发给客户的询盘。
             <strong className="ml-2">有效合计</strong>：客户点「有效」+「超时未标记」（发信后 72

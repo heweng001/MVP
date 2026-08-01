@@ -18,7 +18,7 @@ export default async function BlacklistPage() {
           手动维护。命中后垃圾分直接拉高，通常会被自动拦截。
         </p>
       </div>
-      <HelpCallout title="使用注意" guideHref={null}>
+      <HelpCallout title="使用注意">
         <p>
           <strong>邮箱</strong>：完整地址；<strong>邮箱域名</strong>
           ：如 spam-seo.com（勿拉黑 gmail.com）；

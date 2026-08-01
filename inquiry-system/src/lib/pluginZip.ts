@@ -6,7 +6,7 @@ const PLUGIN_DIR_NAME = "wp-inquiry-bridge";
 
 /** 候选路径：仓库根旁 / 应用内拷贝 */
 function pluginDirCandidates() {
-  const cwd = process.cwd();
+  const cwd = /* turbopackIgnore: true */ process.cwd();
   return [
     path.resolve(cwd, "..", PLUGIN_DIR_NAME),
     path.resolve(cwd, PLUGIN_DIR_NAME),

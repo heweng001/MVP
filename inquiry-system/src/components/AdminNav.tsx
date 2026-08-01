@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 const links = [
-  { href: "/admin/guide", label: "接入说明" },
   { href: "/admin", label: "统计概览" },
   { href: "/admin/inquiries", label: "询盘列表" },
   { href: "/admin/clients", label: "客户列表" },

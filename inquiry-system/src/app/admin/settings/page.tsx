@@ -13,9 +13,9 @@ export default async function SettingsPage() {
           配置系统代发询盘邮件所用的 SMTP 账号与发件人地址。
         </p>
       </div>
-      <HelpCallout title="说明" guideHref="/admin/guide">
+      <HelpCallout title="说明">
         <p>
-          收件人/抄送在各网站的「表单配置」里设置；这里只配置<strong>用哪个邮箱发出</strong>。
+          收件人/抄送在各网站的「配置表单」里设置；这里只配置<strong>用哪个邮箱发出</strong>。
         </p>
         <p>
           密码请用邮箱<strong>客户端授权码</strong>。端口：587 不勾选 SSL；465 勾选 SSL。保存后务必先「发送测试邮件」。
