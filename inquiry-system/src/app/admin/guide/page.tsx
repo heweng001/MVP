@@ -30,6 +30,13 @@ export default function GuidePage() {
         <ol className="list-decimal pl-5 space-y-2 text-sm leading-relaxed">
           <li>
             打开{" "}
+            <Link className="text-[var(--brand)] underline" href="/admin/settings">
+              发件设置
+            </Link>
+            ，配置系统代发询盘所用的 SMTP（发件邮箱）。未配置时询盘无法发出，详见第 6 节。
+          </li>
+          <li>
+            打开{" "}
             <Link className="text-[var(--brand)] underline" href="/admin/clients">
               客户列表
             </Link>
@@ -43,7 +50,7 @@ export default function GuidePage() {
             ，为客户添加网站（域名、SEO型/展示型、起止日期）。一个客户可有多个网站；客户的服务起止会按网站日期自动汇总。
           </li>
           <li>
-            在网站列表右侧点<strong>配置表单</strong>：复制 site_key、配置表单收件与词表。没有收件配置时，系统无法代发询盘。
+            在网站列表右侧点<strong>配置表单</strong>：复制 site_key、配置表单<strong>收件人/抄送</strong>与词表。没有收件配置时，系统无法代发询盘（收件人与发件邮箱是两回事）。
           </li>
         </ol>
       </section>
@@ -133,30 +140,77 @@ export default function GuidePage() {
       </section>
 
       <section className="bg-white border border-[var(--line)] rounded-xl p-5 space-y-3">
-        <h2 className="text-lg font-semibold">6. 邮件与定时任务（上线必做）</h2>
+        <h2 className="text-lg font-semibold">6. 发件设置（SMTP，上线必做）</h2>
+        <p className="text-sm leading-relaxed">
+          询盘邮件由本系统代发。请在{" "}
+          <Link className="text-[var(--brand)] underline" href="/admin/settings">
+            发件设置
+          </Link>{" "}
+          填写 SMTP，并用页面上的「发送测试邮件」确认能收到。
+        </p>
         <ul className="list-disc pl-5 text-sm space-y-2 leading-relaxed">
           <li>
-            在后台 <strong>发件设置</strong> 配置 SMTP 与发件人 From（也可用服务器{" "}
-            <code className="bg-black/5 px-1 rounded">.env</code> 作未保存时的回退）。确保{" "}
-            <code className="bg-black/5 px-1 rounded">APP_URL</code>{" "}
-            为公网地址，否则客户邮件里的标记链接会错。
+            <strong>SMTP 主机</strong>：只填主机名，如{" "}
+            <code className="bg-black/5 px-1 rounded">smtp.qq.com</code>、{" "}
+            <code className="bg-black/5 px-1 rounded">smtp.exmail.qq.com</code>、{" "}
+            <code className="bg-black/5 px-1 rounded">smtp.ym.163.com</code>
+            。不要粘贴整段环境变量，也不要在主机里带端口。
           </li>
           <li>
-            建议每 5～15 分钟调用一次定时接口（处理「待审超时自动发」「72 小时超时未标记」）：
+            <strong>端口与 SSL</strong>：常用两种组合（混用会报{" "}
+            <code className="bg-black/5 px-1 rounded">wrong version number</code>）：
+            <ul className="list-disc pl-5 mt-1 space-y-1">
+              <li>
+                端口 <strong>587</strong>：<strong>不要</strong>勾选 SSL/TLS（走 STARTTLS）
+              </li>
+              <li>
+                端口 <strong>465</strong>：勾选 SSL/TLS
+              </li>
+            </ul>
+          </li>
+          <li>
+            <strong>账号 / 密码</strong>：账号一般为完整邮箱；密码请填邮箱服务商的{" "}
+            <strong>客户端授权码</strong>（QQ / 网易 / 企业邮等），不要填网页登录密码。
+          </li>
+          <li>
+            <strong>发件人 From</strong>：客户看到的发件方，如{" "}
+            <code className="bg-black/5 px-1 rounded">询盘系统 &lt;your@domain.com&gt;</code>
+            ，地址需与 SMTP 账号所属域名一致、且服务商允许代发。
+          </li>
+          <li>
+            <strong>收件人</strong>仍在各网站「配置表单」里设置（To/CC）；发件设置只决定「用哪个邮箱发出」。
+          </li>
+          <li>
+            标记链接依赖公网 <code className="bg-black/5 px-1 rounded">APP_URL</code>
+            （服务器环境变量）。当前站点地址不对时，客户邮件里的有效/无效链接会打不开。
           </li>
         </ul>
+      </section>
+
+      <section className="bg-white border border-[var(--line)] rounded-xl p-5 space-y-3">
+        <h2 className="text-lg font-semibold">7. 定时任务（上线必做）</h2>
+        <p className="text-sm leading-relaxed">
+          建议每 5～15 分钟调用一次，用于：待审超过 6 小时自动发信；发信超过 72 小时未标记 →「超时未标记」。
+        </p>
         <CopyField
           label="定时任务 URL（需带密钥）"
           value={`${cronUrl}?secret=你的CRON_SECRET`}
-          hint="也可用请求头 x-cron-secret。密钥与 .env 中 CRON_SECRET 一致。"
+          hint="也可用请求头 x-cron-secret。密钥与服务器 .env 中 CRON_SECRET 一致。"
         />
       </section>
 
       <section className="bg-white border border-[var(--line)] rounded-xl p-5 space-y-2 text-sm leading-relaxed">
-        <h2 className="text-lg font-semibold">7. 自测清单</h2>
+        <h2 className="text-lg font-semibold">8. 自测清单</h2>
         <ol className="list-decimal pl-5 space-y-1.5">
+          <li>
+            在{" "}
+            <Link className="text-[var(--brand)] underline" href="/admin/settings">
+              发件设置
+            </Link>{" "}
+            保存 SMTP 后，用「发送测试邮件」确认能收到。
+          </li>
           <li>在站点前台提交一封正常询盘（含产品词/quote）。</li>
-          <li>本系统「询盘列表」应出现记录；客户邮箱应收到带「有效/无效」按钮的邮件（需已配 SMTP）。</li>
+          <li>本系统「询盘列表」应出现记录；表单配置的收件邮箱应收到带「有效/无效」按钮的邮件。</li>
           <li>点标记链接，确认页二次确认后，状态变为有效或无效。</li>
           <li>再提交一封明显 SEO 垃圾信，应进入「自动垃圾」且不发给客户。</li>
         </ol>
