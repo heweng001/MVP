@@ -1,17 +1,32 @@
+import { promises as dns } from "dns";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { appUrl } from "./constants";
 import { getSmtpConfig, isSmtpReady, type SmtpConfig } from "./settings";
 
-function transporterFrom(cfg: SmtpConfig) {
+async function resolveIpv4Host(hostname: string) {
+  // nodemailer 会在 A/AAAA 间随机选址；机器有 IPv6 网卡但无路由时会 ENETUNREACH
+  const { address } = await dns.lookup(hostname, { family: 4 });
+  return address;
+}
+
+async function transporterFrom(cfg: SmtpConfig) {
   if (!isSmtpReady(cfg)) return null;
-  // family 强制 IPv4：类型定义未列出，但 nodemailer/net 支持
+  let host = cfg.host;
+  try {
+    host = await resolveIpv4Host(cfg.host);
+  } catch (e) {
+    console.error("[email] IPv4 DNS lookup failed for", cfg.host, e);
+    throw new Error(`无法解析 SMTP 主机的 IPv4 地址：${cfg.host}`);
+  }
   const options = {
-    host: cfg.host,
+    host,
     port: cfg.port,
     secure: cfg.secure,
-    family: 4,
+    // 用 IP 连接时保留原主机名给 TLS/SNI
+    servername: cfg.host,
     requireTLS: !cfg.secure && cfg.port === 587,
+    tls: { servername: cfg.host },
     auth: cfg.user
       ? {
           user: cfg.user,
@@ -54,7 +69,7 @@ export function parseEmails(toEmails: string, ccEmails = "") {
 
 export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const cfg = await getSmtpConfig();
-  const transport = transporterFrom(cfg);
+  const transport = await transporterFrom(cfg);
   const markBase = `${appUrl()}/m/${payload.markToken}`;
   const validUrl = `${markBase}?a=valid`;
   const invalidUrl = `${markBase}?a=invalid`;
@@ -118,7 +133,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
 export async function sendTestEmail(to: string) {
   const cfg = await getSmtpConfig();
-  const transport = transporterFrom(cfg);
+  const transport = await transporterFrom(cfg);
   if (!transport) {
     throw new Error("请先保存有效的 SMTP 主机等配置");
   }
