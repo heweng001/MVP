@@ -17,6 +17,18 @@ export function formatDate(d: Date | string | null | undefined) {
   return `${y}-${m}-${day}`;
 }
 
+export function formatDateTime(d: Date | string | null | undefined) {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "—";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day} ${hh}:${mm}`;
+}
+
 /** Parse YYYY-MM-DD as local calendar date (stored noon UTC-ish via Date) */
 export function parseDateInput(value: unknown): Date | null {
   if (value === null || value === undefined || value === "") return null;

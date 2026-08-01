@@ -30,6 +30,26 @@ model Client {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sites        Site[]
+  promo        ClientPromo?
+}
+
+/// 客户主推信息（与客户一对一）
+model ClientPromo {
+  id               String    @id @default(cuid())
+  clientId         String    @unique
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// 关键词列表
+  keywords         String    @default("")
+  /// 公司产品要点
+  productPoints    String    @default("")
+  /// 广告要点
+  adPoints         String    @default("")
+  editToken        String?   @unique
+  editTokenExpires DateTime?
+  lastSubmittedBy  String    @default("")
+  lastSubmittedAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model Site {

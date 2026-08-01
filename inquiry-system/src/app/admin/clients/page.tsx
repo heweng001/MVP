@@ -27,7 +27,12 @@ export default async function ClientsPage({
         : {}),
     },
     orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { sites: true } } },
+    include: {
+      _count: { select: { sites: true } },
+      promo: {
+        select: { id: true, lastSubmittedBy: true, lastSubmittedAt: true },
+      },
+    },
   });
 
   return (
@@ -62,6 +67,13 @@ export default async function ClientsPage({
           serviceEnd: c.serviceEnd?.toISOString() ?? null,
           lastVisitAt: c.lastVisitAt?.toISOString() ?? null,
           _count: c._count,
+          promo: c.promo
+            ? {
+                id: c.promo.id,
+                lastSubmittedBy: c.promo.lastSubmittedBy,
+                lastSubmittedAt: c.promo.lastSubmittedAt?.toISOString() ?? null,
+              }
+            : null,
         }))}
       />
     </div>

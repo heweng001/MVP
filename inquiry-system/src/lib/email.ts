@@ -164,6 +164,46 @@ export async function sendTestEmail(to: string) {
   return { ok: true as const };
 }
 
+export async function sendPromoEditLink(opts: {
+  to: string;
+  clientName: string;
+  editUrl: string;
+  expiresAt: Date;
+}) {
+  const cfg = await getSmtpConfig();
+  const transport = await transporterFrom(cfg);
+  if (!transport) {
+    throw new Error("请先在「发件设置」配置 SMTP");
+  }
+  const dest = opts.to.trim();
+  if (!dest || !dest.includes("@")) {
+    throw new Error("请填写有效的收件邮箱");
+  }
+  const exp = opts.expiresAt.toLocaleString("zh-CN", { hour12: false });
+  const subject = `【主推信息】请填写/更新「${opts.clientName}」的主推内容`;
+  const text = [
+    `您好，请通过以下链接填写或更新「${opts.clientName}」的主推信息：`,
+    opts.editUrl,
+    "",
+    `链接有效期至：${exp}（7 天内）。提交时请填写您的姓名。`,
+  ].join("\n");
+  const html = `
+    <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
+      <p>您好，请通过以下链接填写或更新「<strong>${escapeHtml(opts.clientName)}</strong>」的主推信息：</p>
+      <p><a href="${escapeHtml(opts.editUrl)}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">打开编辑页</a></p>
+      <p style="color:#666;font-size:12px;">或复制链接：${escapeHtml(opts.editUrl)}</p>
+      <p style="color:#888;font-size:12px;">链接有效期至 ${escapeHtml(exp)}（7 天内）。提交时请填写您的姓名。</p>
+    </div>`;
+  await transport.sendMail({
+    from: cfg.from || cfg.user || "noreply@example.com",
+    to: dest,
+    subject,
+    text,
+    html,
+  });
+  return { ok: true as const };
+}
+
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")

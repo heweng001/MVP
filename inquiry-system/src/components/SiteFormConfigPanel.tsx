@@ -41,8 +41,6 @@ export function SiteFormConfigPanel({
   domain,
   siteKey,
   ingestUrl,
-  productKeywords,
-  spamExtraWords,
   forms,
   onClose,
 }: {
@@ -50,26 +48,11 @@ export function SiteFormConfigPanel({
   domain: string;
   siteKey: string;
   ingestUrl: string;
-  productKeywords: string;
-  spamExtraWords: string;
   forms: FormCfg[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [pk, setPk] = useState(productKeywords);
-  const [sw, setSw] = useState(spamExtraWords);
-
-  async function saveKeywords() {
-    setBusy(true);
-    await fetch(`/api/admin/sites/${siteId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productKeywords: pk, spamExtraWords: sw }),
-    });
-    setBusy(false);
-    router.refresh();
-  }
 
   async function saveForm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -201,38 +184,7 @@ export function SiteFormConfigPanel({
           </form>
         </Step>
 
-        <Step n={4} title="（可选）反垃圾词表">
-          <p className="text-xs text-[var(--muted)]">
-            产品关键词有助于识别正常询盘；扩展垃圾词可加强拦截。可留空先上线。
-          </p>
-          <label className="block text-sm">
-            <span className="text-xs text-[var(--muted)]">产品关键词</span>
-            <textarea
-              value={pk}
-              onChange={(e) => setPk(e.target.value)}
-              className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm min-h-[64px]"
-              placeholder="valve, pump, quotation"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-xs text-[var(--muted)]">扩展垃圾词</span>
-            <textarea
-              value={sw}
-              onChange={(e) => setSw(e.target.value)}
-              className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm min-h-[64px]"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={saveKeywords}
-            className="text-sm border border-[var(--line)] rounded-lg px-3 py-1.5"
-          >
-            保存词表
-          </button>
-        </Step>
-
-        <Step n={5} title="保留 WPForms 原生通知（降级备用）">
+        <Step n={4} title="保留 WPForms 原生通知（降级备用）">
           <p className="text-xs text-[var(--muted)]">
             请<strong>保留</strong> WPForms 该表单的通知收件人。插件推送成功时会阻止本次原生发信；推送失败时仍由
             WPForms 发信，避免丢单。

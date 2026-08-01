@@ -398,8 +398,6 @@ export function SiteList({
           domain={configLive.domain}
           siteKey={configLive.siteKey}
           ingestUrl={ingestUrl}
-          productKeywords={configLive.productKeywords}
-          spamExtraWords={configLive.spamExtraWords}
           forms={configLive.forms}
           onClose={() => setConfigSite(null)}
         />
