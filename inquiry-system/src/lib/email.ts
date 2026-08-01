@@ -8,6 +8,9 @@ function transporterFrom(cfg: SmtpConfig) {
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
+    // 阿里云等环境常无可用 IPv6，避免解析到 AAAA 后 ENETUNREACH
+    family: 4,
+    requireTLS: !cfg.secure && cfg.port === 587,
     auth: cfg.user
       ? {
           user: cfg.user,
