@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Client {
+  id           String    @id @default(cuid())
+  name         String
+  /// 重点 | 正常 | 维护
+  tier         String    @default("正常")
+  contactName  String    @default("")
+  phone        String    @default("")
+  address      String    @default("")
+  notes        String    @default("")
+  /// 由下属网站自动汇总：最早开始 / 最晚结束
+  serviceStart DateTime?
+  serviceEnd   DateTime?
+  lastVisitAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sites        Site[]
+}
+
+model Site {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  domain          String
+  /// SEO型 | 展示型
+  siteType        String    @default("展示型")
+  startDate       DateTime?
+  endDate         DateTime?
+  siteKey         String    @unique
+  productKeywords String    @default("")
+  spamExtraWords  String    @default("")
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  forms           FormMailConfig[]
+  inquiries       Inquiry[]
+  blacklist       BlacklistEntry[]
+
+  @@index([clientId])
+  @@index([siteType])
+  @@index([domain])
+}
+
+model FormMailConfig {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  formId    String
+  label     String   @default("")
+  toEmails  String
+  ccEmails  String   @default("")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, formId])
+}
+
+model Inquiry {
+  id              String    @id @default(cuid())
+  siteId          String
+  site            Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  formId          String
+  entryId         String
+  status          String    @default("pending")
+  name            String    @default("")
+  email           String    @default("")
+  phone           String    @default("")
+  subject         String    @default("")
+  message         String    @default("")
+  pageUrl         String    @default("")
+  rawPayload      String    @default("{}")
+  spamScore       Int       @default(0)
+  spamHits        String    @default("[]")
+  markToken       String    @unique
+  submittedAt     DateTime  @default(now())
+  reviewEnteredAt DateTime?
+  sentAt          DateTime?
+  markedAt        DateTime?
+  notes           String    @default("")
+  degraded        Boolean   @default(false)
+  autoSentReview  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([siteId, formId, entryId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([sentAt])
+}
+
+model BlacklistEntry {
+  id        String   @id @default(cuid())
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type      String
+  value     String
+  reason    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([type, value, siteId])
+  @@index([type, value])
+}
+
+model AppSetting {
+  id    String @id @default("default")
+  value String @default("{}")
+}
