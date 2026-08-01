@@ -133,7 +133,7 @@ export function SiteList({
           原生邮件，不进本系统统计。
         </p>
         <p>
-          新站接入：点右侧<strong>配置表单</strong>，按清单依次安装插件 → 填写 Site Key →
+          新站接入：点右侧<strong>配置对接</strong>，按清单依次安装插件 → 填写 Site Key →
           配置收件人。
         </p>
       </HelpCallout>
