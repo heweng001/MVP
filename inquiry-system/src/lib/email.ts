@@ -124,12 +124,12 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
   const markBlockHtml = `
     <div style="margin-top:16px;">
-      <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
+      <p><strong>请配合标记本封询盘，有利于我们提升询盘质量</strong></p>
       <p>
-        <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
-        <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">无效</a>
+        <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">标为有效</a>
+        <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">标为无效</a>
       </p>
-      <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。</p>
+      <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记</p>
     </div>`;
 
   const separatorHtml = `
@@ -175,11 +175,11 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     "",
     "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
     "",
-    "请协助标记本封询盘（点击链接即完成标记）：",
-    `有效询盘：${validUrl}`,
-    `无效：${invalidUrl}`,
+    "请配合标记本封询盘，有利于我们提升询盘质量",
+    `标为有效：${validUrl}`,
+    `标为无效：${invalidUrl}`,
     "",
-    "已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。",
+    "点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记",
     ...(payload.unlockHint ? ["", payload.unlockHint] : []),
     ...(hiddenRowsText ? [hiddenRowsText] : []),
   ].join("\n");

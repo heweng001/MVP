@@ -21,7 +21,7 @@ export const MAIL_TIPS = {
   displayJourney:
     "升级成SEO型网站，即可查看该买家发送询盘前浏览了网站的页面情况（含具体页面信息及对应页面的停留时间）。",
   seoUnlock:
-    "将本封询盘标记为「有效」后，可在询盘质量反馈页面查看地理位置、用户浏览路径（User Journey）及其他隐藏字段详情。",
+    "将本封询盘标记为「有效」后，即可查看到卖家地理位置信息及浏览路径等更多信息。",
 } as const;
 
 export function mailContentGate(site: {
