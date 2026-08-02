@@ -59,7 +59,6 @@ export type InquiryMailPayload = {
   name: string;
   email: string;
   phone: string;
-  subject: string;
   message: string;
   pageUrl: string;
   formId: string;
@@ -106,15 +105,15 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     .join("");
   const hiddenBlockHtml = hidden.length
     ? `
-    <div style="margin-top:16px;">
-      <p style="margin:0 0 8px;"><strong>隐藏字段</strong></p>
+    <div style="margin-top:12px;">
+      <p style="margin:0 0 8px;"><strong>隐藏字段 / Hidden fields</strong></p>
       <table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;">
         ${hiddenRowsHtml}
       </table>
     </div>`
     : "";
   const hiddenRowsText = hidden.length
-    ? ["", "隐藏字段：", ...hidden.map((f) => `${f.label}：\n${f.html && !f.hint ? stripHtml(f.value) : f.value}`)].join(
+    ? ["", "隐藏字段 / Hidden fields：", ...hidden.map((f) => `${f.label}：\n${f.html && !f.hint ? stripHtml(f.value) : f.value}`)].join(
         "\n",
       )
     : "";
@@ -123,40 +122,55 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ? hintHtml(payload.message)
     : nl2br(escapeHtml(payload.message));
 
+  const belowPartsHtml = [
+    hiddenBlockHtml,
+    payload.unlockHint
+      ? `<div style="margin-top:14px;">${hintHtml(payload.unlockHint)}</div>`
+      : "",
+    `<div style="margin-top:16px;">
+      <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
+      <p>
+        <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
+        <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">无效</a>
+      </p>
+      <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。</p>
+    </div>`,
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const replyNoticeHtml = `
+    <p style="margin:18px 0 8px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:13px;line-height:1.5;">
+      <strong>回复前提示：</strong>若需回复询盘人，请务必先删除下方分割线及分割线以下的全部内容后再发送，避免对方看到内部标记与隐藏信息。
+    </p>
+    <div style="margin:12px 0 16px;border:none;border-top:2px dashed #94a3b8;padding-top:4px;color:#64748b;font-size:12px;text-align:center;">
+      ——— 请删除本分割线及以下全部内容 / Delete this line and everything below before replying ———
+    </div>`;
+
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
     <p>您有一封来自网站 <strong>${escapeHtml(payload.siteName)}</strong>（${escapeHtml(payload.siteDomain)}）的询盘。</p>
     <table style="border-collapse:collapse;width:100%;max-width:640px;">
-      <tr><td style="padding:6px 0;color:#666;width:90px;">姓名</td><td>${escapeHtml(payload.name)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">邮箱</td><td>${escapeHtml(payload.email)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">电话</td><td>${escapeHtml(payload.phone)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">主题</td><td>${escapeHtml(payload.subject)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;vertical-align:top;">内容</td><td>${messageHtml}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">来源页</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;width:110px;">Name</td><td>${escapeHtml(payload.name)}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Email</td><td>${escapeHtml(payload.email)}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Phone/WhatsApp</td><td>${escapeHtml(payload.phone)}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Message</td><td>${messageHtml}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Page URL</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
     </table>
-    ${hiddenBlockHtml}
-    ${
-      payload.unlockHint
-        ? `<div style="margin-top:14px;">${hintHtml(payload.unlockHint)}</div>`
-        : ""
-    }
-    <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
-    <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
-    <p>
-      <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
-      <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">无效</a>
-    </p>
-    <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。</p>
+    ${replyNoticeHtml}
+    ${belowPartsHtml}
   </div>`;
 
   const text = [
     `网站：${payload.siteName} (${payload.siteDomain})`,
-    `姓名：${payload.name}`,
-    `邮箱：${payload.email}`,
-    `电话：${payload.phone}`,
-    `主题：${payload.subject}`,
-    `内容：${payload.message}`,
-    `来源：${payload.pageUrl}`,
+    `Name：${payload.name}`,
+    `Email：${payload.email}`,
+    `Phone/WhatsApp：${payload.phone}`,
+    `Message：${payload.message}`,
+    `Page URL：${payload.pageUrl}`,
+    "",
+    "回复前提示：若需回复询盘人，请务必先删除下方分割线及分割线以下的全部内容后再发送，避免对方看到内部标记与隐藏信息。",
+    "——— 请删除本分割线及以下全部内容 / Delete this line and everything below before replying ———",
     ...(hiddenRowsText ? [hiddenRowsText] : []),
     ...(payload.unlockHint ? ["", payload.unlockHint] : []),
     "",
@@ -182,7 +196,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     to: payload.to.join(", "),
     cc: payload.cc?.length ? payload.cc.join(", ") : undefined,
     replyTo: payload.email || undefined,
-    subject: `[询盘] ${payload.siteName} - ${payload.subject || payload.name || payload.email || "新询盘"}`,
+    subject: `[询盘] ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`,
     text,
     html,
   });

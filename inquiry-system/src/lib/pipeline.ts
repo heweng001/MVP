@@ -86,7 +86,6 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     name: inquiry.name,
     email: inquiry.email,
     phone: inquiry.phone,
-    subject: inquiry.subject,
     message: gated.message,
     messageHint: gated.messageHint,
     unlockHint: gated.unlockHint,
@@ -133,7 +132,7 @@ export async function ingestInquiry(body: IngestBody) {
   const name = String(body.name ?? "");
   const email = String(body.email ?? "");
   const phone = String(body.phone ?? "");
-  const subject = String(body.subject ?? "");
+  const subject = "";
   const message = String(body.message ?? "");
   const pageUrl = String(body.page_url ?? "");
 

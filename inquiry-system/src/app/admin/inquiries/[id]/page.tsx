@@ -70,12 +70,8 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dd>{item.email || "—"}</dd>
           </div>
           <div>
-            <dt className="text-[var(--muted)]">电话</dt>
+            <dt className="text-[var(--muted)]">phone/whatsapp</dt>
             <dd>{item.phone || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--muted)]">主题</dt>
-            <dd>{item.subject || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">Form / Entry</dt>

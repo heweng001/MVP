@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -39,7 +39,6 @@ final class Inquiry_Bridge_Plugin
             'email_field' => '',
             'phone_field' => '',
             'message_field' => '',
-            'subject_field' => '',
         ];
     }
 
@@ -111,10 +110,9 @@ final class Inquiry_Bridge_Plugin
                         <td>
                             <p>姓名 <input name="<?php echo esc_attr(self::OPTION); ?>[name_field]" value="<?php echo esc_attr($s['name_field']); ?>" size="4" /></p>
                             <p>邮箱 <input name="<?php echo esc_attr(self::OPTION); ?>[email_field]" value="<?php echo esc_attr($s['email_field']); ?>" size="4" /></p>
-                            <p>电话 <input name="<?php echo esc_attr(self::OPTION); ?>[phone_field]" value="<?php echo esc_attr($s['phone_field']); ?>" size="4" /></p>
-                            <p>主题 <input name="<?php echo esc_attr(self::OPTION); ?>[subject_field]" value="<?php echo esc_attr($s['subject_field']); ?>" size="4" /></p>
+                            <p>phone/whatsapp <input name="<?php echo esc_attr(self::OPTION); ?>[phone_field]" value="<?php echo esc_attr($s['phone_field']); ?>" size="4" /></p>
                             <p>留言 <input name="<?php echo esc_attr(self::OPTION); ?>[message_field]" value="<?php echo esc_attr($s['message_field']); ?>" size="4" /></p>
-                            <p class="description">在 WPForms 编辑表单时点开字段可见 Field ID。留空则按字段类型自动猜测。</p>
+                            <p class="description">在 WPForms 编辑表单时点开字段可见 Field ID。留空则按字段类型自动猜测（姓名/邮箱/phone/whatsapp/留言）。WhatsApp 若是普通文本字段，请填写其 Field ID。</p>
                         </td>
                     </tr>
                 </table>
@@ -349,7 +347,6 @@ final class Inquiry_Bridge_Plugin
         $name = self::field_value($fields, $settings['name_field']);
         $email = self::field_value($fields, $settings['email_field']);
         $phone = self::field_value($fields, $settings['phone_field']);
-        $subject = self::field_value($fields, $settings['subject_field']);
         $message = self::field_value($fields, $settings['message_field']);
 
         if ($name === '') {
@@ -385,7 +382,7 @@ final class Inquiry_Bridge_Plugin
             'name' => $name,
             'email' => $email,
             'phone' => $phone,
-            'subject' => $subject,
+            'subject' => '',
             'message' => $message,
             'page_url' => $page_url,
             'fields' => $fields,
