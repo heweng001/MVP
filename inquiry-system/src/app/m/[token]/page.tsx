@@ -1,5 +1,10 @@
 import { MarkConfirm } from "@/components/MarkConfirm";
-import { applyMark, getInquiryByToken, markWindowInfo } from "@/lib/mark";
+import {
+  applyMark,
+  getInquiryByToken,
+  getMarkCapabilities,
+  unlockedDetailFields,
+} from "@/lib/mark";
 import { notFound } from "next/navigation";
 
 type Ctx = { params: Promise<{ token: string }>; searchParams: Promise<{ a?: string }> };
@@ -14,10 +19,10 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
 
   let justApplied = false;
   let applyError = "";
-  const windowBefore = markWindowInfo(inquiry.sentAt);
+  const capsBefore = getMarkCapabilities(inquiry);
 
   // 邮件链接一点即标记：打开页面时服务端直接落库，无需二次确认
-  if (action && windowBefore.canMark) {
+  if (action && capsBefore.canInteract) {
     const already =
       (action === "valid" && inquiry.status === "valid") ||
       (action === "invalid" && inquiry.status === "invalid");
@@ -35,7 +40,10 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
     }
   }
 
-  const window = markWindowInfo(inquiry.sentAt);
+  const caps = getMarkCapabilities(inquiry);
+  const unlockedFields = caps.showUnlockedDetails
+    ? unlockedDetailFields(inquiry.rawPayload)
+    : [];
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
@@ -49,10 +57,16 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
         </p>
         <MarkConfirm
           token={token}
-          canMark={window.canMark}
-          reason={window.reason}
+          canInteract={caps.canInteract}
+          reason={caps.reason}
           currentStatus={inquiry.status}
-          remainingMs={window.remainingMs}
+          canMarkValid={caps.canMarkValid}
+          canMarkInvalid={caps.canMarkInvalid}
+          canEditReason={caps.canEditReason}
+          invalidBlockedReason={caps.invalidBlockedReason}
+          unlockAvailable={caps.unlockAvailable}
+          showUnlockedDetails={caps.showUnlockedDetails}
+          unlockedFields={unlockedFields}
           initialMarkReason={inquiry.markReason || ""}
           justApplied={justApplied}
           applyError={applyError}

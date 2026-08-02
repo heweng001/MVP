@@ -68,6 +68,8 @@ export type InquiryMailPayload = {
   hiddenFields?: { label: string; value: string; html?: boolean; hint?: boolean }[];
   /** 询盘正文被门控为提示文案（如网站到期） */
   messageHint?: boolean;
+  /** SEO 未到期：引导标记有效后查看详细信息 */
+  unlockHint?: string;
 };
 
 function parseList(s: string) {
@@ -133,13 +135,18 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <tr><td style="padding:6px 0;color:#666;">来源页</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
     </table>
     ${hiddenBlockHtml}
+    ${
+      payload.unlockHint
+        ? `<div style="margin-top:14px;">${hintHtml(payload.unlockHint)}</div>`
+        : ""
+    }
     <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
     <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
     <p>
       <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
       <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">无效</a>
     </p>
-    <p style="color:#888;font-size:12px;">点击按钮将立即完成标记；发信后 72 小时内可返回页面修改。</p>
+    <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。</p>
   </div>`;
 
   const text = [
@@ -151,10 +158,13 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     `内容：${payload.message}`,
     `来源：${payload.pageUrl}`,
     ...(hiddenRowsText ? [hiddenRowsText] : []),
+    ...(payload.unlockHint ? ["", payload.unlockHint] : []),
     "",
     "请协助标记本封询盘（点击链接即完成标记）：",
     `有效询盘：${validUrl}`,
     `无效：${invalidUrl}`,
+    "",
+    "已标记为有效不可再改为无效；发信超过 72 小时后不可再标无效，仍可标有效；无效询盘可改为有效。",
   ].join("\n");
 
   if (!transport) {

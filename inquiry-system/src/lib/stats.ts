@@ -15,9 +15,8 @@ export type SiteMonthStat = {
   forwarded: number;
   valid: number;
   invalid: number;
-  timeoutUnmarked: number;
   pending: number;
-  /** 待标记 + 超时未标记（有效占比分子用） */
+  /** 待标记（有效占比分子用） */
   unmarked: number;
   review: number;
   effective: number;
@@ -48,7 +47,6 @@ export function emptySiteStat(siteId = ""): SiteMonthStat {
     forwarded: 0,
     valid: 0,
     invalid: 0,
-    timeoutUnmarked: 0,
     pending: 0,
     unmarked: 0,
     review: 0,
@@ -67,7 +65,6 @@ export function sumSiteStats(stats: SiteMonthStat[]): SiteMonthStat {
     acc.forwarded += s.forwarded;
     acc.valid += s.valid;
     acc.invalid += s.invalid;
-    acc.timeoutUnmarked += s.timeoutUnmarked;
     acc.pending += s.pending;
     acc.unmarked += s.unmarked;
     acc.review += s.review;
@@ -102,7 +99,6 @@ export async function siteMonthStats(
       forwarded: number;
       valid: number;
       invalid: number;
-      timeoutUnmarked: number;
       pending: number;
       review: number;
     }
@@ -117,7 +113,6 @@ export async function siteMonthStats(
         forwarded: 0,
         valid: 0,
         invalid: 0,
-        timeoutUnmarked: 0,
         pending: 0,
         review: 0,
       });
@@ -131,17 +126,22 @@ export async function siteMonthStats(
     if (r.status === InquiryStatus.AUTO_SPAM) s.autoSpam++;
     if (r.status === InquiryStatus.REVIEW_SPAM) s.reviewSpam++;
     if (r.status === InquiryStatus.REVIEW) s.review++;
-    if (r.status === InquiryStatus.PENDING) s.pending++;
+    // 历史「超时未标记」并入待标记统计
+    if (
+      r.status === InquiryStatus.PENDING ||
+      r.status === InquiryStatus.TIMEOUT_UNMARKED
+    ) {
+      s.pending++;
+    }
     if (r.status === InquiryStatus.VALID) s.valid++;
     if (r.status === InquiryStatus.INVALID) s.invalid++;
-    if (r.status === InquiryStatus.TIMEOUT_UNMARKED) s.timeoutUnmarked++;
     if (r.sentAt) s.forwarded++;
   }
 
   return Array.from(bySite.entries()).map(([id, s]) => {
-    const unmarked = s.pending + s.timeoutUnmarked;
+    const unmarked = s.pending;
     const intercepted = s.autoSpam + s.reviewSpam;
-    // 有效占比 = (标记有效 + 待标记 + 超时未标记) / 已转发
+    // 有效占比 = (标记有效 + 待标记) / 已转发
     const effective = s.valid + unmarked;
     const rate = s.forwarded > 0 ? effective / s.forwarded : 0;
     return {
@@ -158,12 +158,12 @@ export async function siteMonthStats(
 /** 漏斗各层数量（逐层「上一步 − 本步剔除」收窄） */
 export function funnelLayers(s: SiteMonthStat) {
   const submitted = s.total;
-  const unmarked = s.pending + s.timeoutUnmarked;
+  const unmarked = s.pending;
   // 自动拦截后剩 = 提交 − 自动垃圾（审核垃圾在后续「未转发」中体现）
   const afterAutoRemain = Math.max(0, submitted - s.autoSpam);
   const reviewRemoved = Math.max(0, afterAutoRemain - s.forwarded);
   const afterReviewRemain = Math.max(0, afterAutoRemain - reviewRemoved);
-  const pendingTimeoutPlusValid = unmarked + s.valid;
+  const pendingPlusValid = unmarked + s.valid;
   const markedValid = s.valid;
 
   return [
@@ -194,8 +194,8 @@ export function funnelLayers(s: SiteMonthStat) {
     {
       key: "unmarked_plus_valid",
       label: "未标记无效",
-      hint: "待标记+超时未标记+有效",
-      value: pendingTimeoutPlusValid,
+      hint: "待标记+有效",
+      value: pendingPlusValid,
       removed: 0,
       removedLabel: "",
     },

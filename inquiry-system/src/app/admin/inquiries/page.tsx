@@ -28,19 +28,13 @@ const TABS = [
     key: "forwarded",
     label: "已转发",
     status: "",
-    hint: "已成功发给客户的询盘（含待标记、超时未标记、有效、无效）。",
+    hint: "已成功发给客户的询盘（含待标记、有效、无效）。",
   },
   {
     key: "pending",
     label: "待标记",
     status: InquiryStatus.PENDING,
-    hint: "已转发且仍在标记窗口内，等待客户点有效/无效。",
-  },
-  {
-    key: "timeout_unmarked",
-    label: "超时未标记",
-    status: InquiryStatus.TIMEOUT_UNMARKED,
-    hint: "发信已满 72 小时仍未标记。",
+    hint: "已转发且等待客户点有效/无效。",
   },
   {
     key: "valid",
@@ -57,8 +51,9 @@ const TABS = [
 ] as const;
 
 function tabFromParam(tab: string | undefined, status: string | undefined) {
-  // 兼容旧「未标记」聚合页签
-  if (tab === "unmarked") return "pending";
+  // 兼容旧「未标记 / 超时未标记」页签
+  if (tab === "unmarked" || tab === "timeout_unmarked") return "pending";
+  if (status === InquiryStatus.TIMEOUT_UNMARKED) return "pending";
   if (tab === "auto_spam" || tab === "review_spam") return "spam";
   if (tab && TABS.some((t) => t.key === tab)) return tab;
   if (status === InquiryStatus.AUTO_SPAM || status === InquiryStatus.REVIEW_SPAM) {
@@ -76,6 +71,11 @@ function tabWhere(tab: string): Prisma.InquiryWhereInput {
   if (tab === "spam") {
     return {
       status: { in: [InquiryStatus.AUTO_SPAM, InquiryStatus.REVIEW_SPAM] },
+    };
+  }
+  if (tab === "pending") {
+    return {
+      status: { in: [InquiryStatus.PENDING, InquiryStatus.TIMEOUT_UNMARKED] },
     };
   }
   const tabDef = TABS.find((t) => t.key === tab);
@@ -163,6 +163,10 @@ export default async function InquiriesPage({
   ) as Record<string, number>;
   const totalCount = countsRaw.reduce((sum, c) => sum + c._count._all, 0);
 
+  const pendingCount =
+    (countByStatus[InquiryStatus.PENDING] || 0) +
+    (countByStatus[InquiryStatus.TIMEOUT_UNMARKED] || 0);
+
   const tabs = TABS.map((t) => ({
     key: t.key,
     label: t.label,
@@ -175,7 +179,9 @@ export default async function InquiriesPage({
           ? forwardedCount
           : t.key === "spam"
             ? spamCount
-            : countByStatus[t.status] || 0,
+            : t.key === "pending"
+              ? pendingCount
+              : countByStatus[t.status] || 0,
   }));
 
   return (

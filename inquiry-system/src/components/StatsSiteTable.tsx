@@ -57,7 +57,7 @@ function RateHint() {
         role="tooltip"
         className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-64 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-xs leading-relaxed text-[var(--ink)] shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity"
       >
-        有效占比 = (标记有效 + 待标记 + 超时未标记) ÷ 已转发 × 100%。
+        有效占比 = (标记有效 + 待标记) ÷ 已转发 × 100%。
         <br />
         「拦截」= 自动垃圾 + 审核垃圾。按询盘提交时间归属月份。
       </span>
@@ -82,7 +82,6 @@ type SortKey =
   | "forwarded"
   | "invalid"
   | "pending"
-  | "timeoutUnmarked"
   | "valid"
   | "effectiveRate";
 
@@ -215,13 +214,6 @@ export function StatsSiteTable({
                 sortDir={sortDir}
                 onSort={onSort}
               />
-              <SortTh
-                label="超时未标记"
-                col="timeoutUnmarked"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onSort={onSort}
-              />
               <SortTh label="有效" col="valid" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortTh
                 label="有效占比"
@@ -237,7 +229,7 @@ export function StatsSiteTable({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-[var(--muted)]">
+                <td colSpan={9} className="px-4 py-8 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -250,7 +242,6 @@ export function StatsSiteTable({
                   forwarded: prev?.forwarded ?? 0,
                   invalid: prev?.invalid ?? 0,
                   pending: prev?.pending ?? 0,
-                  timeoutUnmarked: prev?.timeoutUnmarked ?? 0,
                   valid: prev?.valid ?? 0,
                 };
                 return (
@@ -290,13 +281,6 @@ export function StatsSiteTable({
                         href={inquiryHref(year, month, s.siteId, "pending")}
                         value={s.pending}
                         previous={p.pending}
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <StatLink
-                        href={inquiryHref(year, month, s.siteId, "timeout_unmarked")}
-                        value={s.timeoutUnmarked}
-                        previous={p.timeoutUnmarked}
                       />
                     </td>
                     <td className="px-4 py-2">

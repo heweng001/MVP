@@ -89,6 +89,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     subject: inquiry.subject,
     message: gated.message,
     messageHint: gated.messageHint,
+    unlockHint: gated.unlockHint,
     pageUrl: inquiry.pageUrl,
     formId: inquiry.formId,
     entryId: inquiry.entryId,
@@ -243,15 +244,11 @@ export async function processReviewTimeouts() {
   return { processed: due.length, sent };
 }
 
+/** 不再产生「超时未标记」状态；将历史超时未标记回退为待标记 */
 export async function processMarkTimeouts() {
-  const hours = Number(process.env.MARK_HOURS || 72);
-  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
   const result = await prisma.inquiry.updateMany({
-    where: {
-      status: InquiryStatus.PENDING,
-      sentAt: { lte: cutoff, not: null },
-    },
-    data: { status: InquiryStatus.TIMEOUT_UNMARKED },
+    where: { status: InquiryStatus.TIMEOUT_UNMARKED },
+    data: { status: InquiryStatus.PENDING },
   });
-  return { updated: result.count };
+  return { reverted: result.count };
 }

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyMark, saveMarkReason, type MarkAction } from "@/lib/mark";
+import {
+  applyMark,
+  getMarkCapabilities,
+  saveMarkReason,
+  unlockedDetailFields,
+  type MarkAction,
+} from "@/lib/mark";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -33,9 +39,15 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
   }
+
+  const caps = getMarkCapabilities(result.inquiry);
   return NextResponse.json({
     ok: true,
     status: result.inquiry.status,
     markReason: result.inquiry.markReason,
+    showUnlockedDetails: caps.showUnlockedDetails,
+    unlockedFields: caps.showUnlockedDetails
+      ? unlockedDetailFields(result.inquiry.rawPayload)
+      : [],
   });
 }

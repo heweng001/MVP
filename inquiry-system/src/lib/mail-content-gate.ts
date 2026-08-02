@@ -5,6 +5,8 @@ export type MailContentGate = {
   expired: boolean;
   /** 未到期的展示型：隐藏地理/旅程并提示升级 SEO */
   displayUpgrade: boolean;
+  /** SEO 未到期：邮件不展示 hidden/geo/journey，引导标记有效后查看 */
+  seoUnlock: boolean;
 };
 
 export const MAIL_TIPS = {
@@ -18,6 +20,8 @@ export const MAIL_TIPS = {
     "升级成SEO型网站，即可查看询盘来源的国家和城市。",
   displayJourney:
     "升级成SEO型网站，即可查看该买家发送询盘前浏览了网站的页面情况（含具体页面信息及对应页面的停留时间）。",
+  seoUnlock:
+    "将本封询盘标记为「有效」后，可在询盘质量反馈页面查看地理位置、用户浏览路径（User Journey）及其他隐藏字段详情。",
 } as const;
 
 export function mailContentGate(site: {
@@ -29,6 +33,7 @@ export function mailContentGate(site: {
   return {
     expired,
     displayUpgrade: !expired && !isSeo,
+    seoUnlock: !expired && isSeo,
   };
 }
 
@@ -44,18 +49,34 @@ export function applyMailContentGate(opts: {
   message: string;
   hiddenFields: GatedHiddenField[];
   gate: MailContentGate;
-}): { message: string; hiddenFields: GatedHiddenField[]; messageHint: boolean } {
+}): {
+  message: string;
+  hiddenFields: GatedHiddenField[];
+  messageHint: boolean;
+  unlockHint: string;
+} {
   const { gate } = opts;
   let message = opts.message;
   let messageHint = false;
+  let unlockHint = "";
 
   if (gate.expired) {
     message = MAIL_TIPS.expiredMessage;
     messageHint = true;
   }
 
+  // SEO 未到期：邮件中不展示任何 hidden / geo / journey，改为引导标记有效后查看
+  if (gate.seoUnlock) {
+    return {
+      message,
+      hiddenFields: [],
+      messageHint,
+      unlockHint: MAIL_TIPS.seoUnlock,
+    };
+  }
+
   if (!gate.expired && !gate.displayUpgrade) {
-    return { message, hiddenFields: opts.hiddenFields, messageHint };
+    return { message, hiddenFields: opts.hiddenFields, messageHint, unlockHint };
   }
 
   const geoTip = gate.expired ? MAIL_TIPS.expiredGeo : MAIL_TIPS.displayGeo;
@@ -97,7 +118,7 @@ export function applyMailContentGate(opts: {
     });
   }
 
-  return { message, hiddenFields: next, messageHint };
+  return { message, hiddenFields: next, messageHint, unlockHint };
 }
 
 function classifyMailHidden(label: string): "geo" | "journey" | "other" {
