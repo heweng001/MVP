@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
-import { extractHiddenFields } from "@/lib/wp-fields";
+import { extractHiddenFields, extractGeoInfo, extractUserJourney, formatGeoInfo } from "@/lib/wp-fields";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -24,6 +24,9 @@ export default async function InquiryDetailPage({ params }: Ctx) {
   }
 
   const hiddenFields = extractHiddenFields(item.rawPayload);
+  const userJourney = extractUserJourney(item.rawPayload);
+  const geo = extractGeoInfo(item.rawPayload);
+  const locationSummary = geo ? formatGeoInfo(geo) : "";
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -83,6 +86,12 @@ export default async function InquiryDetailPage({ params }: Ctx) {
               {item.message || "(空)"}
             </dd>
           </div>
+          {locationSummary ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)]">地理位置</dt>
+              <dd className="whitespace-pre-wrap mt-1">{locationSummary}</dd>
+            </div>
+          ) : null}
           {hiddenFields.length ? (
             <div className="md:col-span-2">
               <dt className="text-[var(--muted)] mb-1">隐藏字段（WPForms Hidden）</dt>
@@ -93,6 +102,46 @@ export default async function InquiryDetailPage({ params }: Ctx) {
                       <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
                         <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
                         <td className="px-3 py-2 break-all whitespace-pre-wrap">{f.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </dd>
+            </div>
+          ) : null}
+          {userJourney.length ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)] mb-1">用户路径（User Journey）</dt>
+              <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-[var(--muted)]">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">页面</th>
+                      <th className="px-3 py-2 font-medium whitespace-nowrap">时间</th>
+                      <th className="px-3 py-2 font-medium whitespace-nowrap">停留</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userJourney.map((s, i) => (
+                      <tr key={`${s.url}-${i}`} className="border-t border-[var(--line)] align-top">
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{s.title}</div>
+                          {s.url ? (
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[12px] text-[var(--brand)] break-all hover:underline"
+                            >
+                              {s.url}
+                            </a>
+                          ) : null}
+                          {s.referrer ? (
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">来源：{s.referrer}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-[var(--muted)]">{s.when || "—"}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-[var(--muted)]">{s.duration || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

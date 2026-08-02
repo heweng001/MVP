@@ -17,3 +17,4 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
+- v1.1.0 起会附带 WPForms **User Journey**、**Geolocation**（若站点已安装对应 Addon）一并推送到中心系统

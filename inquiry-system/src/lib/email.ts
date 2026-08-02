@@ -64,8 +64,12 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
-  /** WPForms Hidden Field */
+  /** WPForms Hidden Field（国家简称已转中文） */
   hiddenFields?: { label: string; value: string }[];
+  /** WPForms User Journey */
+  userJourney?: { title: string; url: string; when: string; duration: string; referrer: string }[];
+  /** Geolocation 摘要（国家已中文） */
+  locationSummary?: string;
 };
 
 function parseList(s: string) {
@@ -92,12 +96,62 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const hiddenRowsHtml = (payload.hiddenFields || [])
     .map(
       (f) =>
-        `<tr><td style="padding:6px 0;color:#666;width:90px;">${escapeHtml(f.label)}</td><td>${escapeHtml(f.value)}</td></tr>`,
+        `<tr><td style="padding:6px 0;color:#666;width:90px;vertical-align:top;">${escapeHtml(f.label)}</td><td>${nl2br(escapeHtml(f.value))}</td></tr>`,
     )
     .join("");
   const hiddenRowsText = (payload.hiddenFields || [])
     .map((f) => `${f.label}：${f.value}`)
     .join("\n");
+
+  const locationHtml = payload.locationSummary
+    ? `<tr><td style="padding:6px 0;color:#666;vertical-align:top;">地理位置</td><td style="line-height:1.7;">${nl2br(escapeHtml(payload.locationSummary))}</td></tr>`
+    : "";
+  const locationText = payload.locationSummary ? `地理位置：\n${payload.locationSummary}` : "";
+
+  const journey = payload.userJourney || [];
+  const journeyHtml = journey.length
+    ? `
+    <div style="margin-top:16px;">
+      <p style="margin:0 0 8px;"><strong>用户路径（User Journey）</strong></p>
+      <table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;">
+        <thead>
+          <tr style="background:#f8fafc;text-align:left;color:#666;">
+            <th style="padding:6px 8px;border:1px solid #e2e8f0;">页面</th>
+            <th style="padding:6px 8px;border:1px solid #e2e8f0;">时间</th>
+            <th style="padding:6px 8px;border:1px solid #e2e8f0;">停留</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${journey
+            .map((s) => {
+              const page = s.url
+                ? `<a href="${escapeHtml(s.url)}" style="color:#0f766e;">${escapeHtml(s.title || s.url)}</a>`
+                : escapeHtml(s.title);
+              return `<tr>
+                <td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;">${page}${s.referrer ? `<div style="color:#94a3b8;font-size:12px;margin-top:2px;">来源：${escapeHtml(s.referrer)}</div>` : ""}</td>
+                <td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">${escapeHtml(s.when || "—")}</td>
+                <td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">${escapeHtml(s.duration || "—")}</td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`
+    : "";
+  const journeyText = journey.length
+    ? [
+        "",
+        "用户路径（User Journey）：",
+        ...journey.map((s, i) => {
+          const bits = [`${i + 1}. ${s.title || s.url}`];
+          if (s.url) bits.push(s.url);
+          if (s.when) bits.push(`时间 ${s.when}`);
+          if (s.duration) bits.push(`停留 ${s.duration}`);
+          if (s.referrer) bits.push(`来源 ${s.referrer}`);
+          return bits.join(" | ");
+        }),
+      ].join("\n")
+    : "";
 
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
@@ -109,8 +163,10 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <tr><td style="padding:6px 0;color:#666;">主题</td><td>${escapeHtml(payload.subject)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;vertical-align:top;">内容</td><td>${nl2br(escapeHtml(payload.message))}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">来源页</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
+      ${locationHtml}
       ${hiddenRowsHtml}
     </table>
+    ${journeyHtml}
     <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
     <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
     <p>
@@ -128,7 +184,9 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     `主题：${payload.subject}`,
     `内容：${payload.message}`,
     `来源：${payload.pageUrl}`,
+    ...(locationText ? [locationText] : []),
     ...(hiddenRowsText ? [hiddenRowsText] : []),
+    ...(journeyText ? [journeyText] : []),
     "",
     "请协助标记本封询盘（点击链接即完成标记）：",
     `有效询盘：${validUrl}`,
