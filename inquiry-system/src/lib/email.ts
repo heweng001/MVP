@@ -65,7 +65,9 @@ export type InquiryMailPayload = {
   formId: string;
   entryId: string;
   /** WPForms Hidden；可含 page_url / entry_geolocation / entry_user_journey */
-  hiddenFields?: { label: string; value: string; html?: boolean }[];
+  hiddenFields?: { label: string; value: string; html?: boolean; hint?: boolean }[];
+  /** 询盘正文被门控为提示文案（如网站到期） */
+  messageHint?: boolean;
 };
 
 function parseList(s: string) {
@@ -92,9 +94,11 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const hidden = payload.hiddenFields || [];
   const hiddenRowsHtml = hidden
     .map((f) => {
-      const body = f.html
-        ? sanitizeJourneyHtml(f.value)
-        : nl2br(escapeHtml(f.value));
+      const body = f.hint
+        ? hintHtml(f.value)
+        : f.html
+          ? sanitizeJourneyHtml(f.value)
+          : nl2br(escapeHtml(f.value));
       return `<tr><td style="padding:6px 8px;color:#666;width:150px;vertical-align:top;border:1px solid #e2e8f0;">${escapeHtml(f.label)}</td><td style="padding:6px 8px;vertical-align:top;border:1px solid #e2e8f0;">${body}</td></tr>`;
     })
     .join("");
@@ -108,10 +112,14 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     </div>`
     : "";
   const hiddenRowsText = hidden.length
-    ? ["", "隐藏字段：", ...hidden.map((f) => `${f.label}：\n${f.html ? stripHtml(f.value) : f.value}`)].join(
+    ? ["", "隐藏字段：", ...hidden.map((f) => `${f.label}：\n${f.html && !f.hint ? stripHtml(f.value) : f.value}`)].join(
         "\n",
       )
     : "";
+
+  const messageHtml = payload.messageHint
+    ? hintHtml(payload.message)
+    : nl2br(escapeHtml(payload.message));
 
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
@@ -121,7 +129,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <tr><td style="padding:6px 0;color:#666;">邮箱</td><td>${escapeHtml(payload.email)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">电话</td><td>${escapeHtml(payload.phone)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">主题</td><td>${escapeHtml(payload.subject)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;vertical-align:top;">内容</td><td>${nl2br(escapeHtml(payload.message))}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;vertical-align:top;">内容</td><td>${messageHtml}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">来源页</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
     </table>
     ${hiddenBlockHtml}
@@ -242,6 +250,10 @@ function escapeHtml(s: string) {
 
 function nl2br(s: string) {
   return s.replace(/\n/g, "<br/>");
+}
+
+function hintHtml(s: string) {
+  return `<span style="display:inline-block;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:4px;color:#9a3412;font-size:13px;line-height:1.5;">${escapeHtml(s)}</span>`;
 }
 
 /** 仅保留旅程表格常用标签 */

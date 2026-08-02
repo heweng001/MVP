@@ -2,7 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
+import type { SiteListTab, SiteSortField, SortDir } from "@/lib/list-tabs";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
 
 export type SiteRow = {
@@ -30,6 +32,13 @@ export type SiteRow = {
 
 type ClientOpt = { id: string; name: string };
 
+type SiteTab = {
+  key: SiteListTab;
+  label: string;
+  hint: string;
+  count: number;
+};
+
 const emptyForm = {
   clientId: "",
   domain: "",
@@ -44,11 +53,22 @@ export function SiteList({
   clients,
   ingestUrl,
   filters,
+  tab,
+  tabs,
 }: {
   initialSites: SiteRow[];
   clients: ClientOpt[];
   ingestUrl: string;
-  filters: { clientId: string; siteType: string; q: string; enabled: string };
+  filters: {
+    clientId: string;
+    q: string;
+    enabled: string;
+    tab: SiteListTab;
+    sort: SiteSortField | null;
+    order: SortDir;
+  };
+  tab: SiteListTab;
+  tabs: SiteTab[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -57,6 +77,35 @@ export function SiteList({
   const [configSite, setConfigSite] = useState<SiteRow | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+
+  function buildHref(overrides: Record<string, string | null | undefined> = {}) {
+    const p = new URLSearchParams();
+    const next = {
+      tab: filters.tab,
+      clientId: filters.clientId,
+      q: filters.q,
+      enabled: filters.enabled,
+      sort: filters.sort || "",
+      order: filters.sort ? filters.order : "",
+      ...overrides,
+    };
+    for (const [k, v] of Object.entries(next)) {
+      if (v) p.set(k, v);
+    }
+    const qs = p.toString();
+    return qs ? `/admin/sites?${qs}` : "/admin/sites";
+  }
+
+  function sortHref(field: SiteSortField) {
+    const same = filters.sort === field;
+    const nextOrder: SortDir = same && filters.order === "asc" ? "desc" : "asc";
+    return buildHref({ sort: field, order: nextOrder });
+  }
+
+  function sortMark(field: SiteSortField) {
+    if (filters.sort !== field) return "";
+    return filters.order === "asc" ? " ↑" : " ↓";
+  }
 
   function openCreate() {
     setEditing(null);
@@ -124,6 +173,13 @@ export function SiteList({
   return (
     <div className="space-y-4">
       <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3 shadow-sm">
+        <input type="hidden" name="tab" value={tab} />
+        {filters.sort ? (
+          <>
+            <input type="hidden" name="sort" value={filters.sort} />
+            <input type="hidden" name="order" value={filters.order} />
+          </>
+        ) : null}
         <select
           name="clientId"
           defaultValue={filters.clientId}
@@ -133,18 +189,6 @@ export function SiteList({
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          name="siteType"
-          defaultValue={filters.siteType}
-          className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-        >
-          <option value="">全部类型</option>
-          {SITE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
             </option>
           ))}
         </select>
@@ -165,6 +209,14 @@ export function SiteList({
           className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm flex-1 min-w-[160px]"
         />
         <button className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm">筛选</button>
+        {filters.sort ? (
+          <Link
+            href={buildHref({ sort: null, order: null })}
+            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm bg-white text-[var(--muted)] hover:text-[var(--ink)]"
+          >
+            清除排序
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={openCreate}
@@ -179,6 +231,35 @@ export function SiteList({
         <p className="text-sm text-[var(--warn)]">请先在「客户」中创建客户，再新增网站。</p>
       ) : null}
 
+      <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
+        {tabs.map((t) => {
+          const active = t.key === tab;
+          return (
+            <span key={t.key} className="relative group/tab">
+              <Link
+                href={buildHref({ tab: t.key })}
+                className={`inline-block px-2.5 py-1.5 text-xs rounded-t-md border border-b-0 -mb-px ${
+                  active
+                    ? "bg-white border-[var(--line)] text-[var(--brand)] font-medium"
+                    : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
+                }`}
+              >
+                {t.label}
+                <span className="ml-1 tabular-nums">{t.count}</span>
+              </Link>
+              {t.hint ? (
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-40 mt-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--ink)] shadow-lg opacity-0 invisible group-hover/tab:opacity-100 group-hover/tab:visible transition-opacity"
+                >
+                  {t.hint}
+                </span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
         <table className="w-full text-sm min-w-[980px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
@@ -186,12 +267,24 @@ export function SiteList({
               <th className="px-3 py-2">域名</th>
               <th className="px-3 py-2">所属客户</th>
               <th className="px-3 py-2">站点类型</th>
-              <th className="px-3 py-2">开始日期</th>
-              <th className="px-3 py-2">结束日期</th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("startDate")} className="hover:text-[var(--ink)]" title="按开始日期排序">
+                  开始日期{sortMark("startDate")}
+                </Link>
+              </th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("endDate")} className="hover:text-[var(--ink)]" title="按结束日期排序">
+                  结束日期{sortMark("endDate")}
+                </Link>
+              </th>
               <th className="px-3 py-2" title="是否接受该站 WordPress 插件推送的询盘">
                 对接状态
               </th>
-              <th className="px-3 py-2">表单数</th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("formCount")} className="hover:text-[var(--ink)]" title="按表单数排序">
+                  表单数{sortMark("formCount")}
+                </Link>
+              </th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>

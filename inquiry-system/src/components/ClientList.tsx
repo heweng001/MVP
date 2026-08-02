@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CLIENT_TIERS, formatDate, toDateInputValue } from "@/lib/labels";
+import type { ClientListTab } from "@/lib/list-tabs";
 
 export type ClientRow = {
   id: string;
@@ -20,6 +21,13 @@ export type ClientRow = {
   promo: { id: string; lastSubmittedBy: string; lastSubmittedAt: string | null } | null;
 };
 
+type ClientTab = {
+  key: ClientListTab;
+  label: string;
+  hint: string;
+  count: number;
+};
+
 const emptyForm = {
   name: "",
   tier: "正常",
@@ -34,10 +42,14 @@ export function ClientList({
   initialClients,
   initialTier,
   initialQ,
+  tab,
+  tabs,
 }: {
   initialClients: ClientRow[];
   initialTier: string;
   initialQ: string;
+  tab: ClientListTab;
+  tabs: ClientTab[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -45,6 +57,14 @@ export function ClientList({
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+
+  function hrefFor(nextTab: string) {
+    const p = new URLSearchParams();
+    p.set("tab", nextTab);
+    if (initialTier) p.set("tier", initialTier);
+    if (initialQ) p.set("q", initialQ);
+    return `/admin/clients?${p.toString()}`;
+  }
 
   const tierClass = useMemo(
     () =>
@@ -118,6 +138,7 @@ export function ClientList({
   return (
     <div className="space-y-4">
       <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3">
+        <input type="hidden" name="tab" value={tab} />
         <select
           name="tier"
           defaultValue={initialTier}
@@ -145,6 +166,35 @@ export function ClientList({
           新增客户
         </button>
       </form>
+
+      <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
+        {tabs.map((t) => {
+          const active = t.key === tab;
+          return (
+            <span key={t.key} className="relative group/tab">
+              <Link
+                href={hrefFor(t.key)}
+                className={`inline-block px-2.5 py-1.5 text-xs rounded-t-md border border-b-0 -mb-px ${
+                  active
+                    ? "bg-white border-[var(--line)] text-[var(--brand)] font-medium"
+                    : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
+                }`}
+              >
+                {t.label}
+                <span className="ml-1 tabular-nums">{t.count}</span>
+              </Link>
+              {t.hint ? (
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-40 mt-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--ink)] shadow-lg opacity-0 invisible group-hover/tab:opacity-100 group-hover/tab:visible transition-opacity"
+                >
+                  {t.hint}
+                </span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
         <table className="w-full text-sm min-w-[1100px]">

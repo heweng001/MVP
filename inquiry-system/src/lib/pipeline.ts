@@ -4,6 +4,7 @@ import { InquiryStatus } from "./constants";
 import { scoreSpam } from "./spam";
 import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
+import { applyMailContentGate, mailContentGate } from "./mail-content-gate";
 import { extractHiddenFields } from "./wp-fields";
 
 export type IngestBody = {
@@ -66,11 +67,16 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   if (!inquiry) throw new Error("Inquiry not found");
 
   const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
-  const hiddenFields = extractHiddenFields(inquiry.rawPayload).map((f) => ({
-    label: f.label,
-    value: f.value,
-    html: f.html,
-  }));
+  const gate = mailContentGate(inquiry.site);
+  const gated = applyMailContentGate({
+    message: inquiry.message,
+    hiddenFields: extractHiddenFields(inquiry.rawPayload).map((f) => ({
+      label: f.label,
+      value: f.value,
+      html: f.html,
+    })),
+    gate,
+  });
   const sent = await sendInquiryEmail({
     to: recipients.to,
     cc: recipients.cc,
@@ -81,11 +87,12 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     email: inquiry.email,
     phone: inquiry.phone,
     subject: inquiry.subject,
-    message: inquiry.message,
+    message: gated.message,
+    messageHint: gated.messageHint,
     pageUrl: inquiry.pageUrl,
     formId: inquiry.formId,
     entryId: inquiry.entryId,
-    hiddenFields,
+    hiddenFields: gated.hiddenFields,
   });
   if (sent.skipped) {
     throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");
