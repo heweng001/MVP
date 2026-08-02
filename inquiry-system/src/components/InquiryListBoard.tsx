@@ -81,7 +81,16 @@ export function InquiryListBoard({
     return `/admin/inquiries?${params.toString()}`;
   }
 
-  async function batch(action: "resend" | "valid" | "invalid" | "auto_spam") {
+  async function batch(
+    action:
+      | "resend"
+      | "valid"
+      | "invalid"
+      | "auto_spam"
+      | "approve_review"
+      | "reject_review"
+      | "delete",
+  ) {
     const list = Array.from(selected);
     if (!list.length) {
       setMsg("请先勾选询盘");
@@ -92,8 +101,15 @@ export function InquiryListBoard({
       valid: "标为有效",
       invalid: "标为无效",
       auto_spam: "标为垃圾",
+      approve_review: "审核通过（发给客户）",
+      reject_review: "标为垃圾（不发给客户）",
+      delete: "删除",
     } as const;
-    if (!confirm(`确认对选中的 ${list.length} 条执行「${labels[action]}」？`)) return;
+    const tip =
+      action === "delete"
+        ? `确认永久删除选中的 ${list.length} 条询盘？\n\n删除后不可恢复，相关统计也会随之减少。`
+        : `确认对选中的 ${list.length} 条执行「${labels[action]}」？`;
+    if (!confirm(tip)) return;
 
     setBusy(true);
     setMsg("");
@@ -112,6 +128,8 @@ export function InquiryListBoard({
     setMsg(`完成：成功 ${data.success} 条${data.failed ? `，失败 ${data.failed} 条` : ""}`);
     router.refresh();
   }
+
+  const isReviewTab = tab === "review";
 
   const colSpan = (showStatusColumn ? 8 : 7) + 1;
 
@@ -185,37 +203,68 @@ export function InquiryListBoard({
 
       <div className="flex flex-wrap items-center gap-1.5 text-xs bg-white border border-[var(--line)] rounded-lg px-2.5 py-2">
         <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
+        {isReviewTab ? (
+          <>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("approve_review")}
+              className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量审核通过
+            </button>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("reject_review")}
+              className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量标为垃圾
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("resend")}
+              className="border border-[var(--line)] rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量补发
+            </button>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("valid")}
+              className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量有效
+            </button>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("invalid")}
+              className="bg-[var(--warn)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量无效
+            </button>
+            <button
+              type="button"
+              disabled={busy || selected.size === 0}
+              onClick={() => batch("auto_spam")}
+              className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+            >
+              批量垃圾
+            </button>
+          </>
+        )}
         <button
           type="button"
           disabled={busy || selected.size === 0}
-          onClick={() => batch("resend")}
-          className="border border-[var(--line)] rounded px-2 py-0.5 disabled:opacity-40"
+          onClick={() => batch("delete")}
+          className="border border-[var(--danger)] text-[var(--danger)] rounded px-2 py-0.5 disabled:opacity-40"
         >
-          批量补发
-        </button>
-        <button
-          type="button"
-          disabled={busy || selected.size === 0}
-          onClick={() => batch("valid")}
-          className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-        >
-          批量有效
-        </button>
-        <button
-          type="button"
-          disabled={busy || selected.size === 0}
-          onClick={() => batch("invalid")}
-          className="bg-[var(--warn)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-        >
-          批量无效
-        </button>
-        <button
-          type="button"
-          disabled={busy || selected.size === 0}
-          onClick={() => batch("auto_spam")}
-          className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-        >
-          批量垃圾
+          批量删除
         </button>
         {msg ? <span className="text-[var(--muted)] ml-1">{msg}</span> : null}
       </div>

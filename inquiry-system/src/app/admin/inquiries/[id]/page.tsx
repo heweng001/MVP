@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { STATUS_LABELS } from "@/lib/constants";
+import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
 import { extractHiddenFields } from "@/lib/wp-fields";
@@ -33,7 +33,11 @@ export default async function InquiryDetailPage({ params }: Ctx) {
       />
 
       <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg p-4 space-y-3 shadow-sm">
-        <InquiryActions id={item.id} mode="detail" forwarded={Boolean(item.sentAt)} />
+        <InquiryActions
+          id={item.id}
+          mode={item.status === InquiryStatus.REVIEW ? "review" : "detail"}
+          forwarded={Boolean(item.sentAt)}
+        />
         <dl className="grid md:grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-[var(--muted)]">提交时间</dt>

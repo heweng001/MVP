@@ -31,7 +31,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     const updated = await prisma.inquiry.update({
       where: { id },
-      data: { status: InquiryStatus.REVIEW_SPAM, notes: inquiry.notes + "\n审核驳回" },
+      data: {
+        status: InquiryStatus.REVIEW_SPAM,
+        notes: `${inquiry.notes || ""}\n审核标为垃圾`.trim(),
+      },
     });
     return NextResponse.json({ ok: true, inquiry: updated });
   }

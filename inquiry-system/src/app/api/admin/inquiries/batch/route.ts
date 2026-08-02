@@ -4,7 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { InquiryStatus } from "@/lib/constants";
 import { sendInquiryById } from "@/lib/pipeline";
 
-const BATCH_ACTIONS = ["resend", "valid", "invalid", "auto_spam"] as const;
+const BATCH_ACTIONS = [
+  "resend",
+  "valid",
+  "invalid",
+  "auto_spam",
+  "approve_review",
+  "reject_review",
+  "delete",
+] as const;
 type BatchAction = (typeof BATCH_ACTIONS)[number];
 
 export async function POST(req: NextRequest) {
@@ -27,14 +35,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "单次最多 100 条" }, { status: 400 });
   }
 
+  if (action === "delete") {
+    const result = await prisma.inquiry.deleteMany({
+      where: { id: { in: ids } },
+    });
+    return NextResponse.json({
+      ok: true,
+      success: result.count,
+      failed: ids.length - result.count,
+      errors: [],
+    });
+  }
+
   let ok = 0;
   let fail = 0;
   const errors: string[] = [];
 
   for (const id of ids) {
     try {
-      if (action === "resend") {
+      if (action === "resend" || action === "approve_review") {
+        if (action === "approve_review") {
+          const row = await prisma.inquiry.findUnique({ where: { id } });
+          if (!row) throw new Error("不存在");
+          if (row.status !== InquiryStatus.REVIEW) {
+            throw new Error("仅待审核可审核通过");
+          }
+        }
         await sendInquiryById(id);
+        ok++;
+        continue;
+      }
+
+      if (action === "reject_review") {
+        const row = await prisma.inquiry.findUnique({ where: { id } });
+        if (!row) throw new Error("不存在");
+        if (row.status !== InquiryStatus.REVIEW) {
+          throw new Error("仅待审核可标为垃圾");
+        }
+        await prisma.inquiry.update({
+          where: { id },
+          data: {
+            status: InquiryStatus.REVIEW_SPAM,
+            notes: `${row.notes || ""}\n审核标为垃圾`.trim(),
+          },
+        });
         ok++;
         continue;
       }
@@ -45,7 +89,10 @@ export async function POST(req: NextRequest) {
         if (row.sentAt) throw new Error("已转发不可标垃圾");
         await prisma.inquiry.update({
           where: { id },
-          data: { status: InquiryStatus.REVIEW_SPAM },
+          data: {
+            status: InquiryStatus.REVIEW_SPAM,
+            notes: `${row.notes || ""}\n手动标为垃圾`.trim(),
+          },
         });
         ok++;
         continue;

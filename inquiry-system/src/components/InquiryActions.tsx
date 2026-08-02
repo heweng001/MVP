@@ -3,7 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-const DETAIL_CONFIRMS: Record<string, string> = {
+const ACTION_CONFIRMS: Record<string, string> = {
+  approve_review:
+    "确认「审核通过」？\n\n确认后将把该询盘发给客户邮箱（含有效/无效标记链接）。",
+  reject_review:
+    "确认「标为垃圾」？\n\n确认后状态变为「审核垃圾」，不会发给客户；可在垃圾列表中查看或补发。",
   resend:
     "确认补发？\n\n确认后将再次向客户邮箱发送该询盘邮件（含有效/无效标记链接）。",
   valid:
@@ -31,12 +35,9 @@ export function InquiryActions({
   const [msg, setMsg] = useState("");
 
   async function run(action: string, extra?: Record<string, string>) {
-    if (mode === "detail") {
-      const key =
-        action === "set_status" ? String(extra?.status || "") : action;
-      const tip = DETAIL_CONFIRMS[key];
-      if (tip && !confirm(tip)) return;
-    }
+    const key = action === "set_status" ? String(extra?.status || "") : action;
+    const tip = ACTION_CONFIRMS[key];
+    if (tip && !confirm(tip)) return;
 
     setBusy(true);
     setMsg("");
@@ -67,14 +68,14 @@ export function InquiryActions({
             onClick={() => run("approve_review")}
             className={`${btn} bg-[var(--brand)] text-white`}
           >
-            通过发送
+            审核通过
           </button>
           <button
             disabled={busy}
             onClick={() => run("reject_review")}
             className={`${btn} bg-[var(--danger)] text-white`}
           >
-            驳回
+            标为垃圾
           </button>
         </>
       ) : (
