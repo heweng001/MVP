@@ -70,7 +70,7 @@ export function StatsFunnel({
                   </div>
                 ) : layer.key === "unmarked_plus_valid" ? (
                   <div className="text-[10px] text-[var(--muted)] leading-tight">
-                    待标记 + 超时未标记 + 有效
+                    待标记+超时未标记+有效
                   </div>
                 ) : stepRate != null ? (
                   <div className="text-[10px] text-[var(--muted)] tabular-nums leading-tight">

@@ -21,9 +21,9 @@ npm run db:setup
 npm run dev
 ```
 
-打开 http://localhost:3000 ，默认管理员见 `.env`。
+打开 http://localhost:3001 ，默认管理员见 `.env`。
 
-Windows 重启开发服务：双击 `restart-dev.cmd`（仓库根目录或 `inquiry-system/` 均可），会先释放 3000 端口再执行 `npm run dev`。
+Windows 重启开发服务：双击 `restart-dev.cmd`（仓库根目录或 `inquiry-system/` 均可），会先释放 3001 端口再执行 `npm run dev`。
 
 ## 生产部署
 

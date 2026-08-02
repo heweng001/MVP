@@ -193,8 +193,8 @@ export function funnelLayers(s: SiteMonthStat) {
     },
     {
       key: "unmarked_plus_valid",
-      label: "待标记+超时未标记+有效",
-      hint: "待标记 + 超时未标记 + 标记有效",
+      label: "未标记无效",
+      hint: "待标记+超时未标记+有效",
       value: pendingTimeoutPlusValid,
       removed: 0,
       removedLabel: "",

@@ -16,7 +16,7 @@ npm run db:setup
 npm run dev
 ```
 
-浏览器打开 http://localhost:3000  
+浏览器打开 http://localhost:3001  
 默认管理员：`.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD`（默认 `admin` / `admin123`）
 
 ## 配置要点

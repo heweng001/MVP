@@ -8,10 +8,10 @@ echo  目录: %CD%
 echo ========================================
 echo.
 
-echo [1/2] 停止占用 3000 端口的进程...
+echo [1/2] 停止占用 3001 端口的进程...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue;" ^
-  "if (-not $conns) { Write-Host '  端口 3000 空闲'; exit 0 }" ^
+  "$conns = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue;" ^
+  "if (-not $conns) { Write-Host '  端口 3001 空闲'; exit 0 }" ^
   "foreach ($c in $conns) {" ^
   "  $procId = $c.OwningProcess;" ^
   "  if ($procId) {" ^
@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 timeout /t 1 /nobreak >nul
 echo.
 
-echo [2/2] 启动开发服务 (http://localhost:3000) ...
+echo [2/2] 启动开发服务 (http://localhost:3001) ...
 echo 按 Ctrl+C 可停止服务
 echo.
 npm.cmd run dev
