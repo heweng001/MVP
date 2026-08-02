@@ -22,7 +22,13 @@ export function markWindowInfo(sentAt: Date | null) {
   return { canMark: true, reason: "", remainingMs };
 }
 
-export async function applyMark(token: string, action: MarkAction) {
+function normalizeReason(reason?: string | null) {
+  return String(reason ?? "")
+    .trim()
+    .slice(0, 500);
+}
+
+export async function applyMark(token: string, action: MarkAction, reason?: string | null) {
   const inquiry = await getInquiryByToken(token);
   if (!inquiry) return { ok: false as const, error: "无效链接" };
 
@@ -42,12 +48,39 @@ export async function applyMark(token: string, action: MarkAction) {
     return { ok: false as const, error: window.reason };
   }
 
-  const status =
-    action === "valid" ? InquiryStatus.VALID : InquiryStatus.INVALID;
+  const status = action === "valid" ? InquiryStatus.VALID : InquiryStatus.INVALID;
+  const markReason = normalizeReason(reason);
 
   const updated = await prisma.inquiry.update({
     where: { id: inquiry.id },
-    data: { status, markedAt: new Date() },
+    data: {
+      status,
+      markedAt: new Date(),
+      ...(reason !== undefined ? { markReason } : {}),
+    },
+    include: { site: true },
+  });
+
+  return { ok: true as const, inquiry: updated };
+}
+
+/** 仅更新反馈原因（已标记且仍在窗口内） */
+export async function saveMarkReason(token: string, reason: string) {
+  const inquiry = await getInquiryByToken(token);
+  if (!inquiry) return { ok: false as const, error: "无效链接" };
+
+  if (inquiry.status !== InquiryStatus.VALID && inquiry.status !== InquiryStatus.INVALID) {
+    return { ok: false as const, error: "请先完成有效/无效标记后再填写原因。" };
+  }
+
+  const window = markWindowInfo(inquiry.sentAt);
+  if (!window.canMark) {
+    return { ok: false as const, error: window.reason };
+  }
+
+  const updated = await prisma.inquiry.update({
+    where: { id: inquiry.id },
+    data: { markReason: normalizeReason(reason) },
     include: { site: true },
   });
 

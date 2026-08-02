@@ -13,6 +13,7 @@ export type InquiryListItem = {
   name: string;
   email: string;
   message: string;
+  markReason: string;
   spamScore: number;
   submittedAt: string;
   domain: string;
@@ -107,7 +108,7 @@ export function InquiryListBoard({
     router.refresh();
   }
 
-  const colSpan = (showStatusColumn ? 7 : 6) + 1;
+  const colSpan = (showStatusColumn ? 8 : 7) + 1;
 
   return (
     <div className="space-y-3">
@@ -222,6 +223,7 @@ export function InquiryListBoard({
                 <th className="px-2 py-1.5 font-medium whitespace-nowrap">状态</th>
               ) : null}
               <th className="px-2 py-1.5 font-medium min-w-[220px]">正文</th>
+              <th className="px-2 py-1.5 font-medium min-w-[140px]">客户反馈</th>
               <th className="px-2 py-1.5 font-medium text-right whitespace-nowrap">操作</th>
             </tr>
           </thead>
@@ -288,6 +290,18 @@ export function InquiryListBoard({
                       >
                         {body || <span className="text-[var(--muted)]">(无正文)</span>}
                       </div>
+                    </td>
+                    <td className="px-2 py-1 max-w-[200px]">
+                      {item.markReason ? (
+                        <div
+                          className="line-clamp-2 leading-snug text-[11px] text-[var(--ink)] cursor-default"
+                          title={item.markReason}
+                        >
+                          {item.markReason}
+                        </div>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
                     </td>
                     <td className="px-2 py-1 text-right">
                       <div className="inline-flex flex-col items-end gap-1">

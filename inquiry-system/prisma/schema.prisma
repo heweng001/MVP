@@ -130,6 +130,8 @@ model Inquiry {
   reviewEnteredAt DateTime?
   sentAt          DateTime?
   markedAt        DateTime?
+  /// 客户标记时选填的反馈原因
+  markReason      String    @default("")
   notes           String    @default("")
   degraded        Boolean   @default(false)
   autoSentReview  Boolean   @default(false)

@@ -11,7 +11,7 @@ export type InquiryStatusValue =
   (typeof InquiryStatus)[keyof typeof InquiryStatus];
 
 export const STATUS_LABELS: Record<string, string> = {
-  review: "待判定",
+  review: "待审核",
   pending: "待标记",
   valid: "有效",
   invalid: "无效",

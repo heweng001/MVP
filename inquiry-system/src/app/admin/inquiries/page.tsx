@@ -12,7 +12,7 @@ const TABS = [
   },
   {
     key: "review",
-    label: "待判定",
+    label: "待审核",
     status: InquiryStatus.REVIEW,
     hint: "垃圾分处于中间带，系统不敢自动拦截也不直接转发。需人工「通过发送」或「驳回」。超过 6 小时未处理将自动发给客户。",
   },
@@ -20,7 +20,7 @@ const TABS = [
     key: "auto_spam",
     label: "自动垃圾",
     status: InquiryStatus.AUTO_SPAM,
-    hint: "系统判定为明显垃圾（或待判定中被驳回），未发给客户。仅后台可查，可批量改状态或补发（补发后会发给客户）。",
+    hint: "系统判定为明显垃圾（或待审核中被驳回），未发给客户。仅后台可查，可批量改状态或补发（补发后会发给客户）。",
   },
   {
     key: "pending",
@@ -77,6 +77,7 @@ export default async function InquiriesPage({
             { email: { contains: q } },
             { message: { contains: q } },
             { phone: { contains: q } },
+            { markReason: { contains: q } },
           ],
         }
       : {}),
@@ -130,6 +131,7 @@ export default async function InquiriesPage({
         name: item.name,
         email: item.email,
         message: item.message,
+        markReason: item.markReason || "",
         spamScore: item.spamScore,
         submittedAt: format(item.submittedAt, "MM-dd HH:mm"),
         domain: item.site.domain,

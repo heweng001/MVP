@@ -114,7 +114,7 @@ export default async function AdminHome({
           { label: "超时未标记", value: totals.timeoutUnmarked },
           { label: "客户标无效", value: totals.invalid },
           {
-            label: "当前待判定 / 待标记",
+            label: "当前待审核 / 待标记",
             value: `${reviewCount}/${pendingCount}`,
           },
         ].map((c) => (

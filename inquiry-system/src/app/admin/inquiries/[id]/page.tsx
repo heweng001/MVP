@@ -47,6 +47,12 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dt className="text-[var(--muted)]">标记时间</dt>
             <dd>{item.markedAt ? format(item.markedAt, "yyyy-MM-dd HH:mm:ss") : "—"}</dd>
           </div>
+          <div className="md:col-span-2">
+            <dt className="text-[var(--muted)]">客户反馈原因</dt>
+            <dd className="whitespace-pre-wrap mt-1">
+              {item.markReason?.trim() ? item.markReason : "—"}
+            </dd>
+          </div>
           <div>
             <dt className="text-[var(--muted)]">垃圾分</dt>
             <dd>{item.spamScore}</dd>
