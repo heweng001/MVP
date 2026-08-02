@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
+import { extractHiddenFields } from "@/lib/wp-fields";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -21,6 +22,8 @@ export default async function InquiryDetailPage({ params }: Ctx) {
   } catch {
     hits = [];
   }
+
+  const hiddenFields = extractHiddenFields(item.rawPayload);
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -61,6 +64,10 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dd>{item.phone || "—"}</dd>
           </div>
           <div>
+            <dt className="text-[var(--muted)]">主题</dt>
+            <dd>{item.subject || "—"}</dd>
+          </div>
+          <div>
             <dt className="text-[var(--muted)]">Form / Entry</dt>
             <dd>
               {item.formId} / {item.entryId}
@@ -76,6 +83,23 @@ export default async function InquiryDetailPage({ params }: Ctx) {
               {item.message || "(空)"}
             </dd>
           </div>
+          {hiddenFields.length ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)] mb-1">隐藏字段（WPForms Hidden）</dt>
+              <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {hiddenFields.map((f) => (
+                      <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
+                        <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
+                        <td className="px-3 py-2 break-all whitespace-pre-wrap">{f.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </dd>
+            </div>
+          ) : null}
         </dl>
         {hits.length ? (
           <div>

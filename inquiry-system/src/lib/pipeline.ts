@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { InquiryStatus, spamThreshold } from "./constants";
 import { scoreSpam, reviewBandLow } from "./spam";
 import { parseEmails, sendInquiryEmail } from "./email";
+import { extractHiddenFields } from "./wp-fields";
 
 export type IngestBody = {
   site_key: string;
@@ -61,6 +62,10 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   if (!inquiry) throw new Error("Inquiry not found");
 
   const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
+  const hiddenFields = extractHiddenFields(inquiry.rawPayload).map((f) => ({
+    label: f.label,
+    value: f.value,
+  }));
   const sent = await sendInquiryEmail({
     to: recipients.to,
     cc: recipients.cc,
@@ -75,6 +80,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     pageUrl: inquiry.pageUrl,
     formId: inquiry.formId,
     entryId: inquiry.entryId,
+    hiddenFields,
   });
   if (sent.skipped) {
     throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");

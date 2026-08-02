@@ -2,24 +2,30 @@
 
 import { useState } from "react";
 import { STATUS_LABELS } from "@/lib/constants";
+import { formatMarkRemaining } from "@/lib/wp-fields";
 
 export function MarkConfirm({
   token,
-  preferredAction,
   canMark,
   reason,
   currentStatus,
+  remainingMs,
+  justApplied,
+  applyError,
 }: {
   token: string;
-  preferredAction: "" | "valid" | "invalid";
   canMark: boolean;
   reason: string;
   currentStatus: string;
+  remainingMs: number;
+  /** 本次从邮件链接一键完成了标记 */
+  justApplied?: boolean;
+  applyError?: string;
 }) {
   const [status, setStatus] = useState(currentStatus);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(applyError || "");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const marked = status === "valid" || status === "invalid";
 
   async function submit(action: "valid" | "invalid") {
     setBusy(true);
@@ -36,76 +42,83 @@ export function MarkConfirm({
       return;
     }
     setStatus(data.status);
-    setDone(true);
   }
 
-  if (!canMark) {
+  if (!canMark && !marked) {
     return (
       <div className="space-y-2">
         <p className="text-sm">{reason || "当前无法标记。"}</p>
         <p className="text-sm text-[var(--muted)]">
           状态：{STATUS_LABELS[status] || status}
         </p>
+        {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       </div>
     );
   }
 
-  if (done) {
+  if (marked) {
     return (
-      <div className="space-y-2">
-        <p className="text-[var(--brand)] font-medium">
-          已标记为「{STATUS_LABELS[status] || status}」
+      <div className="space-y-3">
+        <p className="text-[var(--brand)] font-medium text-base">
+          {justApplied ? "已成功标记为" : "当前标记为"}「{STATUS_LABELS[status] || status}」
         </p>
-        <p className="text-sm text-[var(--muted)]">
-          发信后 72 小时内仍可返回此页修改。
-        </p>
-        <div className="flex gap-2 pt-2">
-          <button
-            disabled={busy}
-            onClick={() => submit("valid")}
-            className="bg-[var(--brand)] text-white rounded-lg px-3 py-2 text-sm"
-          >
-            改为有效
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => submit("invalid")}
-            className="bg-[var(--warn)] text-white rounded-lg px-3 py-2 text-sm"
-          >
-            改为无效
-          </button>
-        </div>
+        {canMark ? (
+          <p className="text-sm text-[var(--muted)]">
+            仍可修改，剩余时间：{formatMarkRemaining(remainingMs)}
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">{reason || "标记窗口已结束，不可再改。"}</p>
+        )}
+        {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+        {canMark ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              disabled={busy || status === "valid"}
+              onClick={() => submit("valid")}
+              className="bg-[var(--brand)] text-white rounded-md px-3 py-2 text-sm disabled:opacity-40"
+            >
+              改为有效
+            </button>
+            <button
+              type="button"
+              disabled={busy || status === "invalid"}
+              onClick={() => submit("invalid")}
+              className="bg-[var(--warn)] text-white rounded-md px-3 py-2 text-sm disabled:opacity-40"
+            >
+              改为无效
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
 
+  // 未带邮件动作打开页面：直接一点即标记（无二次确认）
   return (
     <div className="space-y-3">
-      <p className="text-sm">
-        请确认将本封询盘标记为：
-        <strong className="ml-1">
-          {preferredAction === "invalid" ? "垃圾/无效" : preferredAction === "valid" ? "有效询盘" : "请选择"}
-        </strong>
-      </p>
+      <p className="text-sm text-[var(--muted)]">请选择标记结果（点击后立即生效）：</p>
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
         <button
+          type="button"
           disabled={busy}
           onClick={() => submit("valid")}
-          className="bg-[var(--brand)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+          className="bg-[var(--brand)] text-white rounded-md px-4 py-2 text-sm disabled:opacity-50"
         >
-          确认：有效询盘
+          有效询盘
         </button>
         <button
+          type="button"
           disabled={busy}
           onClick={() => submit("invalid")}
-          className="bg-[var(--warn)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+          className="bg-[var(--warn)] text-white rounded-md px-4 py-2 text-sm disabled:opacity-50"
         >
-          确认：垃圾/无效
+          垃圾/无效
         </button>
       </div>
       <p className="text-xs text-[var(--muted)]">
-        当前状态：{STATUS_LABELS[status] || status}。需二次确认以防邮件客户端误触。
+        剩余可改时间：{formatMarkRemaining(remainingMs)}
       </p>
     </div>
   );

@@ -64,6 +64,8 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
+  /** WPForms Hidden Field */
+  hiddenFields?: { label: string; value: string }[];
 };
 
 function parseList(s: string) {
@@ -87,6 +89,16 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const validUrl = `${markBase}?a=valid`;
   const invalidUrl = `${markBase}?a=invalid`;
 
+  const hiddenRowsHtml = (payload.hiddenFields || [])
+    .map(
+      (f) =>
+        `<tr><td style="padding:6px 0;color:#666;width:90px;">${escapeHtml(f.label)}</td><td>${escapeHtml(f.value)}</td></tr>`,
+    )
+    .join("");
+  const hiddenRowsText = (payload.hiddenFields || [])
+    .map((f) => `${f.label}：${f.value}`)
+    .join("\n");
+
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
     <p>您有一封来自网站 <strong>${escapeHtml(payload.siteName)}</strong>（${escapeHtml(payload.siteDomain)}）的询盘。</p>
@@ -97,6 +109,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <tr><td style="padding:6px 0;color:#666;">主题</td><td>${escapeHtml(payload.subject)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;vertical-align:top;">内容</td><td>${nl2br(escapeHtml(payload.message))}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">来源页</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
+      ${hiddenRowsHtml}
     </table>
     <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
     <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
@@ -104,7 +117,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
       <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">垃圾/无效</a>
     </p>
-    <p style="color:#888;font-size:12px;">发信后 72 小时内可修改标记结果。</p>
+    <p style="color:#888;font-size:12px;">点击按钮将立即完成标记；发信后 72 小时内可返回页面修改。</p>
   </div>`;
 
   const text = [
@@ -115,8 +128,9 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     `主题：${payload.subject}`,
     `内容：${payload.message}`,
     `来源：${payload.pageUrl}`,
+    ...(hiddenRowsText ? [hiddenRowsText] : []),
     "",
-    "请协助标记本封询盘：",
+    "请协助标记本封询盘（点击链接即完成标记）：",
     `有效询盘：${validUrl}`,
     `垃圾/无效：${invalidUrl}`,
   ].join("\n");
