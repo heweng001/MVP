@@ -1,10 +1,13 @@
 import { localizeCountryCodes } from "./countries";
+import { formatGeolocationZh, parseGeoSmartBlob } from "./places";
 
 export type WpFormFieldRow = {
   id: string;
   label: string;
   value: string;
   type: string;
+  /** 邮件中允许按 HTML 渲染（如 User Journey 表格） */
+  html?: boolean;
 };
 
 function fieldLabel(f: Record<string, unknown>, fallbackId: string) {
@@ -81,14 +84,109 @@ export function parseWpFormFields(rawPayload: string | null | undefined): WpForm
     .filter((f) => f.value !== "");
 }
 
+function normLabel(s: string) {
+  return s.toLowerCase().replace(/[{}\s_\-]/g, "");
+}
+
+type SmartKind = "page_url" | "entry_geolocation" | "entry_user_journey" | "combined" | "other";
+
+function classifyHidden(f: WpFormFieldRow): SmartKind {
+  const n = normLabel(f.label);
+  if (/entryuserjourney|userjourney|用户路径|用户旅程/.test(n)) return "entry_user_journey";
+  if (/entrygeolocation|geolocation|地理位置|geo/.test(n)) return "entry_geolocation";
+  if (/^pageurl$|来源页|页面链接|pageurl/.test(n) && !/国家|geo|journey/.test(n)) return "page_url";
+  if (/询盘链接|链接.*国家|国家.*链接|pageurl.*geo|geo.*page/.test(n)) return "combined";
+  // 值形态：URL + 城市国家 + 坐标
+  if (/https?:\/\/\S+\s+.+/i.test(f.value) && /[A-Z]{2}\b/.test(f.value)) return "combined";
+  if (/^https?:\/\/\S+$/i.test(f.value.trim())) return "page_url";
+  return "other";
+}
+
 /**
- * 全部 WPForms Hidden Field（逐字段）。
- * 值中的国家简称（如 CN）会转为中文全称。
+ * 邮件/详情用：保证 page_url、entry_geolocation、entry_user_journey 分别展示；
+ * entry_geolocation 转为中文国家/城市详情。
  */
 export function extractHiddenFields(rawPayload: string | null | undefined): WpFormFieldRow[] {
-  return parseWpFormFields(rawPayload)
-    .filter((f) => f.type === "hidden")
-    .map((f) => ({ ...f, value: localizeCountryCodes(f.value) }));
+  const hiddens = parseWpFormFields(rawPayload).filter((f) => f.type === "hidden");
+  let pageUrl = "";
+  let geoText = "";
+  let journey = "";
+  let journeyHtml = false;
+  const others: WpFormFieldRow[] = [];
+  const used = new Set<string>();
+
+  for (const f of hiddens) {
+    const kind = classifyHidden(f);
+    if (kind === "page_url") {
+      pageUrl = f.value;
+      used.add(f.id);
+    } else if (kind === "entry_geolocation") {
+      geoText = f.value;
+      used.add(f.id);
+    } else if (kind === "entry_user_journey") {
+      const raw = f.value.replace(/\{entry_user_journey\}/gi, "").trim();
+      if (raw) {
+        journey = raw;
+        journeyHtml = /<[a-z][\s\S]*>/i.test(raw);
+      }
+      used.add(f.id);
+    } else if (kind === "combined") {
+      const parsed = parseGeoSmartBlob(f.value);
+      if (parsed.pageUrl) pageUrl = pageUrl || parsed.pageUrl;
+      const withoutUrl = f.value
+        .replace(/\{entry_user_journey\}/gi, "")
+        .replace(parsed.pageUrl, "")
+        .trim();
+      geoText = geoText || withoutUrl;
+      if (parsed.journeyRaw) {
+        journey = journey || parsed.journeyRaw;
+        journeyHtml = /<[a-z][\s\S]*>/i.test(parsed.journeyRaw);
+      }
+      used.add(f.id);
+    }
+  }
+
+  // 未分类的其余 hidden
+  for (const f of hiddens) {
+    if (used.has(f.id)) continue;
+    others.push({
+      ...f,
+      value: localizeCountryCodes(f.value.replace(/\{entry_user_journey\}/gi, "").trim()),
+    });
+  }
+
+  const out: WpFormFieldRow[] = [];
+  if (pageUrl) {
+    out.push({ id: "smart-page_url", label: "page_url（页面链接）", value: pageUrl, type: "hidden" });
+  }
+  if (geoText) {
+    out.push({
+      id: "smart-entry_geolocation",
+      label: "entry_geolocation（地理位置）",
+      value: formatGeolocationZh(geoText),
+      type: "hidden",
+    });
+  }
+  const journeyClean = journey.replace(/\{entry_user_journey\}/gi, "").trim();
+  if (journeyClean) {
+    out.push({
+      id: "smart-entry_user_journey",
+      label: "entry_user_journey（用户路径）",
+      value: journeyClean,
+      type: "hidden",
+      html: journeyHtml,
+    });
+  } else if (hiddens.some((f) => /entry_user_journey|user_journey|用户路径|\{entry_user_journey\}/i.test(f.label + f.value))) {
+    out.push({
+      id: "smart-entry_user_journey",
+      label: "entry_user_journey（用户路径）",
+      value: "（未解析到路径内容：表单 Hidden 中的 {entry_user_journey} 可能尚未被 WPForms 展开）",
+      type: "hidden",
+    });
+  }
+
+  out.push(...others.filter((f) => f.value));
+  return out;
 }
 
 export function formatMarkRemaining(ms: number) {

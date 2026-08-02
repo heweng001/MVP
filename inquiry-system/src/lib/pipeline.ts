@@ -65,6 +65,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   const hiddenFields = extractHiddenFields(inquiry.rawPayload).map((f) => ({
     label: f.label,
     value: f.value,
+    html: f.html,
   }));
   const sent = await sendInquiryEmail({
     to: recipients.to,

@@ -92,7 +92,16 @@ export default async function InquiryDetailPage({ params }: Ctx) {
                     {hiddenFields.map((f) => (
                       <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
                         <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
-                        <td className="px-3 py-2 break-all whitespace-pre-wrap">{f.value}</td>
+                        <td className="px-3 py-2 break-all whitespace-pre-wrap">
+                          {f.html ? (
+                            <div
+                              className="text-sm [&_table]:w-full [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-1"
+                              dangerouslySetInnerHTML={{ __html: f.value }}
+                            />
+                          ) : (
+                            f.value
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

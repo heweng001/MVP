@@ -64,8 +64,8 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
-  /** WPForms Hidden Field（逐字段；国家简称已转中文） */
-  hiddenFields?: { label: string; value: string }[];
+  /** WPForms Hidden；可含 page_url / entry_geolocation / entry_user_journey */
+  hiddenFields?: { label: string; value: string; html?: boolean }[];
 };
 
 function parseList(s: string) {
@@ -91,22 +91,26 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
   const hidden = payload.hiddenFields || [];
   const hiddenRowsHtml = hidden
-    .map(
-      (f) =>
-        `<tr><td style="padding:6px 8px;color:#666;width:120px;vertical-align:top;border:1px solid #e2e8f0;">${escapeHtml(f.label)}</td><td style="padding:6px 8px;vertical-align:top;border:1px solid #e2e8f0;">${nl2br(escapeHtml(f.value))}</td></tr>`,
-    )
+    .map((f) => {
+      const body = f.html
+        ? sanitizeJourneyHtml(f.value)
+        : nl2br(escapeHtml(f.value));
+      return `<tr><td style="padding:6px 8px;color:#666;width:150px;vertical-align:top;border:1px solid #e2e8f0;">${escapeHtml(f.label)}</td><td style="padding:6px 8px;vertical-align:top;border:1px solid #e2e8f0;">${body}</td></tr>`;
+    })
     .join("");
   const hiddenBlockHtml = hidden.length
     ? `
     <div style="margin-top:16px;">
-      <p style="margin:0 0 8px;"><strong>隐藏字段（WPForms Hidden）</strong></p>
+      <p style="margin:0 0 8px;"><strong>隐藏字段</strong></p>
       <table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;">
         ${hiddenRowsHtml}
       </table>
     </div>`
     : "";
   const hiddenRowsText = hidden.length
-    ? ["", "隐藏字段（WPForms Hidden）：", ...hidden.map((f) => `${f.label}：${f.value}`)].join("\n")
+    ? ["", "隐藏字段：", ...hidden.map((f) => `${f.label}：\n${f.html ? stripHtml(f.value) : f.value}`)].join(
+        "\n",
+      )
     : "";
 
   const html = `
@@ -238,4 +242,22 @@ function escapeHtml(s: string) {
 
 function nl2br(s: string) {
   return s.replace(/\n/g, "<br/>");
+}
+
+/** 仅保留旅程表格常用标签 */
+function sanitizeJourneyHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "");
+}
+
+function stripHtml(html: string) {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
 }
