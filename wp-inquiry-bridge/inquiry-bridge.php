@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.2
+ * Version: 1.0.4
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -23,8 +23,8 @@ final class Inquiry_Bridge_Plugin
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
 
-        // Entry saved, before notification emails (preferred timing).
-        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 5, 4);
+        // 稍晚执行，便于 User Journey Addon 先写入 entry meta
+        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 25, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -80,6 +80,7 @@ final class Inquiry_Bridge_Plugin
                     <li><strong>Site Key</strong>：该站专用密钥（每站不同，勿共用）</li>
                 </ul>
                 <p>请<strong>保留</strong> WPForms 表单「通知」作为降级备用：推送成功时本插件会阻止本次原生发信；推送失败时仍由 WPForms 发信，避免丢单。</p>
+                <p>用户路径从 WPForms <strong>User Journey</strong> 板块（entry meta）读取，无需在 Hidden 中写 <code>{entry_user_journey}</code>。</p>
             </div>
             <form method="post" action="options.php">
                 <?php settings_fields('inquiry_bridge'); ?>
@@ -156,6 +157,181 @@ final class Inquiry_Bridge_Plugin
         return '';
     }
 
+    /** @return object|null */
+    private static function entry_meta_handler()
+    {
+        if (!function_exists('wpforms')) {
+            return null;
+        }
+        $wpforms = wpforms();
+        if (is_object($wpforms) && method_exists($wpforms, 'obj')) {
+            $h = $wpforms->obj('entry_meta');
+            if ($h) {
+                return $h;
+            }
+        }
+        if (!empty($wpforms->entry_meta)) {
+            return $wpforms->entry_meta;
+        }
+        return null;
+    }
+
+    private static function decode_meta_data($data)
+    {
+        if ($data === null || $data === '') {
+            return null;
+        }
+        if (is_array($data) || is_object($data)) {
+            return $data;
+        }
+        if (!is_string($data)) {
+            return $data;
+        }
+        $json = json_decode($data, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $json;
+        }
+        $un = maybe_unserialize($data);
+        return $un;
+    }
+
+    /**
+     * 从 WPForms User Journey 板块（entry meta）读取路径数据
+     */
+    private static function collect_user_journey($entry_id)
+    {
+        $handler = self::entry_meta_handler();
+        if (!$handler || !method_exists($handler, 'get_meta')) {
+            return null;
+        }
+        $entry_id = absint($entry_id);
+        if (!$entry_id) {
+            return null;
+        }
+
+        foreach (['user_journey', 'user-journey', 'journey'] as $type) {
+            $meta = $handler->get_meta(
+                [
+                    'entry_id' => $entry_id,
+                    'type' => $type,
+                    'number' => 1,
+                ]
+            );
+            if (empty($meta[0]->data)) {
+                $meta = $handler->get_meta(
+                    [
+                        'entry_id' => $entry_id,
+                        'type' => $type,
+                    ]
+                );
+            }
+            if (!empty($meta[0]->data)) {
+                return self::decode_meta_data($meta[0]->data);
+            }
+        }
+        return null;
+    }
+
+    private static function pick_step_str($row, $keys)
+    {
+        foreach ($keys as $k) {
+            if (isset($row[$k]) && (string) $row[$k] !== '') {
+                return (string) $row[$k];
+            }
+        }
+        return '';
+    }
+
+    /** 将 User Journey 原始数据格式化为邮件可用的 HTML 表格 */
+    private static function format_user_journey_html($journey)
+    {
+        if ($journey === null || $journey === '') {
+            return '';
+        }
+        if (is_string($journey)) {
+            $trim = trim($journey);
+            if ($trim === '' || strpos($trim, '{entry_user_journey}') !== false) {
+                return '';
+            }
+            // 已是 HTML
+            if (stripos($trim, '<table') !== false || stripos($trim, '<tr') !== false) {
+                return $trim;
+            }
+            $decoded = json_decode($trim, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $journey = $decoded;
+            } else {
+                return esc_html($trim);
+            }
+        }
+
+        if (is_object($journey)) {
+            $journey = (array) $journey;
+        }
+        if (!is_array($journey)) {
+            return '';
+        }
+
+        // 可能包在 steps / pages / journey 键下
+        if (isset($journey['steps']) && is_array($journey['steps'])) {
+            $steps = $journey['steps'];
+        } elseif (isset($journey['pages']) && is_array($journey['pages'])) {
+            $steps = $journey['pages'];
+        } elseif (isset($journey['journey']) && is_array($journey['journey'])) {
+            $steps = $journey['journey'];
+        } else {
+            $steps = $journey;
+        }
+
+        // 关联数组单条 → 包成列表
+        if ($steps && !isset($steps[0]) && (isset($steps['url']) || isset($steps['title']))) {
+            $steps = [$steps];
+        }
+
+        $rows = '';
+        foreach ($steps as $step) {
+            if (is_object($step)) {
+                $step = (array) $step;
+            }
+            if (!is_array($step)) {
+                continue;
+            }
+            $title = self::pick_step_str($step, ['title', 'pageTitle', 'page_title', 'name', 'page']);
+            $url = self::pick_step_str($step, ['url', 'pageUrl', 'page_url', 'href', 'path']);
+            $when = self::pick_step_str($step, ['date', 'datetime', 'timestamp', 'time', 'when', 'created', 'date_created']);
+            $duration = self::pick_step_str($step, ['duration', 'timeOnPage', 'time_on_page', 'time_spent']);
+            $referrer = self::pick_step_str($step, ['referrer', 'referer', 'ref']);
+            if ($title === '' && $url === '') {
+                continue;
+            }
+            if ($title === '') {
+                $title = $url;
+            }
+            $page_html = $url !== ''
+                ? '<a href="' . esc_url($url) . '">' . esc_html($title) . '</a>'
+                : esc_html($title);
+            if ($referrer !== '') {
+                $page_html .= '<div style="color:#94a3b8;font-size:12px;margin-top:2px;">来源：' . esc_html($referrer) . '</div>';
+            }
+            $rows .= '<tr>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;">' . $page_html . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($when !== '' ? $when : '—') . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($duration !== '' ? $duration : '—') . '</td>'
+                . '</tr>';
+        }
+
+        if ($rows === '') {
+            return '';
+        }
+
+        return '<table style="border-collapse:collapse;width:100%;font-size:13px;">'
+            . '<thead><tr style="background:#f8fafc;text-align:left;color:#666;">'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">页面</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">时间</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">停留</th>'
+            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
+    }
+
     public static function on_entry_saved($fields, $entry, $form_data, $entry_id)
     {
         $settings = self::settings();
@@ -198,7 +374,10 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        // fields 含全部 WPForms 字段（含 Hidden）；中心系统从中解析 Hidden
+        // 直接从 User Journey 板块（entry meta）抓取，不依赖 Hidden 中的 Smart Tag
+        $journey_raw = self::collect_user_journey($entry_id);
+        $entry_user_journey = self::format_user_journey_html($journey_raw);
+
         $payload = [
             'site_key' => $settings['site_key'],
             'form_id' => (string) $form_id,
@@ -210,10 +389,12 @@ final class Inquiry_Bridge_Plugin
             'message' => $message,
             'page_url' => $page_url,
             'fields' => $fields,
+            'entry_user_journey' => $entry_user_journey,
+            'user_journey' => $journey_raw,
         ];
 
         $response = wp_remote_post($settings['api_url'], [
-            'timeout' => 12,
+            'timeout' => 15,
             'headers' => ['Content-Type' => 'application/json'],
             'body' => wp_json_encode($payload),
         ]);

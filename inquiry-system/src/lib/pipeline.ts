@@ -16,6 +16,9 @@ export type IngestBody = {
   message?: string;
   page_url?: string;
   fields?: Record<string, unknown>;
+  /** 插件从 WPForms User Journey 板块抓取并格式化后的 HTML */
+  entry_user_journey?: string;
+  user_journey?: unknown;
 };
 
 function token() {
@@ -173,7 +176,10 @@ export async function ingestInquiry(body: IngestBody) {
       subject,
       message,
       pageUrl,
-      rawPayload: JSON.stringify(body.fields ?? body),
+      rawPayload: JSON.stringify({
+        fields: body.fields ?? {},
+        entry_user_journey: body.entry_user_journey || "",
+      }),
       spamScore: spam.score,
       spamHits: JSON.stringify(spam.hits),
       markToken: token(),

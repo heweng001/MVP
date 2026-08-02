@@ -88,30 +88,33 @@ function normLabel(s: string) {
   return s.toLowerCase().replace(/[{}\s_\-]/g, "");
 }
 
-type SmartKind = "page_url" | "entry_geolocation" | "entry_user_journey" | "combined" | "other";
+type SmartKind = "page_url" | "entry_geolocation" | "combined" | "other";
 
 function classifyHidden(f: WpFormFieldRow): SmartKind {
   const n = normLabel(f.label);
-  if (/entryuserjourney|userjourney|用户路径|用户旅程/.test(n)) return "entry_user_journey";
   if (/entrygeolocation|geolocation|地理位置|geo/.test(n)) return "entry_geolocation";
   if (/^pageurl$|来源页|页面链接|pageurl/.test(n) && !/国家|geo|journey/.test(n)) return "page_url";
   if (/询盘链接|链接.*国家|国家.*链接|pageurl.*geo|geo.*page/.test(n)) return "combined";
-  // 值形态：URL + 城市国家 + 坐标
   if (/https?:\/\/\S+\s+.+/i.test(f.value) && /[A-Z]{2}\b/.test(f.value)) return "combined";
   if (/^https?:\/\/\S+$/i.test(f.value.trim())) return "page_url";
   return "other";
 }
 
 /**
- * 邮件/详情用：保证 page_url、entry_geolocation、entry_user_journey 分别展示；
- * entry_geolocation 转为中文国家/城市详情。
+ * 邮件/详情：
+ * - page_url / entry_geolocation 来自 Hidden
+ * - entry_user_journey 来自插件抓取的 WPForms User Journey 板块（rawPayload.entry_user_journey）
  */
 export function extractHiddenFields(rawPayload: string | null | undefined): WpFormFieldRow[] {
+  const root = parseRaw(rawPayload);
+  const journeyFromMeta =
+    root && typeof root === "object" && !Array.isArray(root)
+      ? String((root as Record<string, unknown>).entry_user_journey || "").trim()
+      : "";
+
   const hiddens = parseWpFormFields(rawPayload).filter((f) => f.type === "hidden");
   let pageUrl = "";
   let geoText = "";
-  let journey = "";
-  let journeyHtml = false;
   const others: WpFormFieldRow[] = [];
   const used = new Set<string>();
 
@@ -123,13 +126,6 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
     } else if (kind === "entry_geolocation") {
       geoText = f.value;
       used.add(f.id);
-    } else if (kind === "entry_user_journey") {
-      const raw = f.value.replace(/\{entry_user_journey\}/gi, "").trim();
-      if (raw) {
-        journey = raw;
-        journeyHtml = /<[a-z][\s\S]*>/i.test(raw);
-      }
-      used.add(f.id);
     } else if (kind === "combined") {
       const parsed = parseGeoSmartBlob(f.value);
       if (parsed.pageUrl) pageUrl = pageUrl || parsed.pageUrl;
@@ -138,20 +134,17 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
         .replace(parsed.pageUrl, "")
         .trim();
       geoText = geoText || withoutUrl;
-      if (parsed.journeyRaw) {
-        journey = journey || parsed.journeyRaw;
-        journeyHtml = /<[a-z][\s\S]*>/i.test(parsed.journeyRaw);
-      }
       used.add(f.id);
     }
   }
 
-  // 未分类的其余 hidden
   for (const f of hiddens) {
     if (used.has(f.id)) continue;
+    const cleaned = f.value.replace(/\{entry_user_journey\}/gi, "").trim();
+    if (!cleaned) continue;
     others.push({
       ...f,
-      value: localizeCountryCodes(f.value.replace(/\{entry_user_journey\}/gi, "").trim()),
+      value: localizeCountryCodes(cleaned),
     });
   }
 
@@ -167,25 +160,17 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
       type: "hidden",
     });
   }
-  const journeyClean = journey.replace(/\{entry_user_journey\}/gi, "").trim();
-  if (journeyClean) {
+  if (journeyFromMeta) {
     out.push({
       id: "smart-entry_user_journey",
       label: "entry_user_journey（用户路径）",
-      value: journeyClean,
+      value: journeyFromMeta,
       type: "hidden",
-      html: journeyHtml,
-    });
-  } else if (hiddens.some((f) => /entry_user_journey|user_journey|用户路径|\{entry_user_journey\}/i.test(f.label + f.value))) {
-    out.push({
-      id: "smart-entry_user_journey",
-      label: "entry_user_journey（用户路径）",
-      value: "（未解析到路径内容：表单 Hidden 中的 {entry_user_journey} 可能尚未被 WPForms 展开）",
-      type: "hidden",
+      html: /<[a-z][\s\S]*>/i.test(journeyFromMeta),
     });
   }
 
-  out.push(...others.filter((f) => f.value));
+  out.push(...others);
   return out;
 }
 
