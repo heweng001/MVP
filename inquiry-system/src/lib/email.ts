@@ -133,9 +133,11 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     </div>`;
 
   const separatorHtml = `
-    <div style="margin:20px 0 16px;padding:14px 12px;background:#fef2f2;border:2px solid #dc2626;border-radius:8px;text-align:center;">
-      <p style="margin:0;color:#b91c1c;font-size:16px;font-weight:700;line-height:1.5;">
-        回复客户邮件前，请务必删掉分割线后所有内容！！！
+    <div style="margin:20px 0 16px;border:none;border-top:2px dashed #94a3b8;padding-top:10px;text-align:center;">
+      <p style="margin:0;font-size:14px;line-height:1.5;">
+        ————
+        <span style="color:#dc2626;font-weight:700;">回复客户邮件前，请务必删掉分割线后所有内容！！！</span>
+        ————
       </p>
     </div>`;
 
@@ -171,7 +173,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     `Message：${payload.message}`,
     `Page URL：${payload.pageUrl}`,
     "",
-    "★★★ 回复客户邮件前，请务必删掉分割线后所有内容！！！ ★★★",
+    "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
     "",
     "请协助标记本封询盘（点击链接即完成标记）：",
     `有效询盘：${validUrl}`,
