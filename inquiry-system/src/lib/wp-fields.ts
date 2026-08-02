@@ -183,3 +183,14 @@ export function formatMarkRemaining(ms: number) {
   if (m === 0) return `约 ${h} 小时`;
   return `约 ${h} 小时 ${m} 分钟`;
 }
+
+/** 用于「请在 xx 小时 xx 分钟内」类文案（不加「约」） */
+export function formatMarkRemainingPlain(ms: number) {
+  if (ms <= 0) return "0 分钟";
+  const totalMin = Math.ceil(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m} 分钟`;
+  if (m === 0) return `${h} 小时`;
+  return `${h} 小时 ${m} 分钟`;
+}

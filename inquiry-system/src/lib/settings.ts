@@ -9,8 +9,17 @@ export type SmtpConfig = {
   from: string;
 };
 
+/** 垃圾分流转阈值（分数 0–100） */
+export type SpamRoutingConfig = {
+  /** 分数 ≥ 此值 → 自动垃圾 */
+  autoSpamMin: number;
+  /** 分数 ≥ 此值且 < autoSpamMin → 人工审核；低于此值 → 直接转发 */
+  reviewMin: number;
+};
+
 type AppSettingsValue = {
   smtp?: Partial<SmtpConfig>;
+  spamRouting?: Partial<SpamRoutingConfig>;
 };
 
 const DEFAULT_SMTP: SmtpConfig = {
@@ -20,6 +29,11 @@ const DEFAULT_SMTP: SmtpConfig = {
   user: "",
   pass: "",
   from: "",
+};
+
+const DEFAULT_SPAM_ROUTING: SpamRoutingConfig = {
+  autoSpamMin: Number(process.env.SPAM_THRESHOLD || 80) || 80,
+  reviewMin: Number(process.env.REVIEW_SCORE_MIN || 20) || 20,
 };
 
 function envSmtp(): SmtpConfig {
@@ -153,4 +167,65 @@ export async function saveSmtpConfig(input: {
 
   await writeSettings({ ...settings, smtp });
   return smtp;
+}
+
+function clampScore(n: number, fallback: number) {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+export function normalizeSpamRouting(
+  raw?: Partial<SpamRoutingConfig> | null,
+): SpamRoutingConfig {
+  const autoSpamMin = clampScore(
+    Number(raw?.autoSpamMin ?? DEFAULT_SPAM_ROUTING.autoSpamMin),
+    DEFAULT_SPAM_ROUTING.autoSpamMin,
+  );
+  let reviewMin = clampScore(
+    Number(raw?.reviewMin ?? DEFAULT_SPAM_ROUTING.reviewMin),
+    DEFAULT_SPAM_ROUTING.reviewMin,
+  );
+  if (reviewMin >= autoSpamMin) {
+    reviewMin = Math.max(0, autoSpamMin - 1);
+  }
+  return { autoSpamMin, reviewMin };
+}
+
+export function validateSpamRouting(input: {
+  autoSpamMin: number;
+  reviewMin: number;
+}): string | null {
+  const autoSpamMin = Number(input.autoSpamMin);
+  const reviewMin = Number(input.reviewMin);
+  if (!Number.isFinite(autoSpamMin) || !Number.isFinite(reviewMin)) {
+    return "请填写有效的分数阈值";
+  }
+  if (autoSpamMin < 1 || autoSpamMin > 100 || reviewMin < 0 || reviewMin > 100) {
+    return "分数阈值需在 0–100 之间";
+  }
+  if (reviewMin >= autoSpamMin) {
+    return "人工审核阈值必须小于自动垃圾阈值";
+  }
+  return null;
+}
+
+/** 优先读后台配置，否则回退环境变量默认值 */
+export async function getSpamRoutingConfig(): Promise<SpamRoutingConfig> {
+  const settings = await readSettings();
+  if (settings.spamRouting) {
+    return normalizeSpamRouting(settings.spamRouting);
+  }
+  return normalizeSpamRouting(DEFAULT_SPAM_ROUTING);
+}
+
+export async function saveSpamRoutingConfig(input: {
+  autoSpamMin: number;
+  reviewMin: number;
+}) {
+  const err = validateSpamRouting(input);
+  if (err) throw new Error(err);
+  const spamRouting = normalizeSpamRouting(input);
+  const settings = await readSettings();
+  await writeSettings({ ...settings, spamRouting });
+  return spamRouting;
 }

@@ -3,6 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+const DETAIL_CONFIRMS: Record<string, string> = {
+  resend:
+    "确认补发？\n\n确认后将再次向客户邮箱发送该询盘邮件（含有效/无效标记链接）。",
+  valid:
+    "确认标为「有效」？\n\n确认后该询盘状态将变为有效，并计入有效询盘统计（会覆盖客户此前的标记结果）。",
+  invalid:
+    "确认标为「无效」？\n\n确认后该询盘状态将变为无效，不计入有效询盘统计（会覆盖客户此前的标记结果）。",
+  review_spam:
+    "确认标为「垃圾」？\n\n确认后该询盘将进入「审核垃圾」，不会按正常询盘发给客户；可在垃圾列表中查看或补发。",
+};
+
 export function InquiryActions({
   id,
   mode,
@@ -20,6 +31,13 @@ export function InquiryActions({
   const [msg, setMsg] = useState("");
 
   async function run(action: string, extra?: Record<string, string>) {
+    if (mode === "detail") {
+      const key =
+        action === "set_status" ? String(extra?.status || "") : action;
+      const tip = DETAIL_CONFIRMS[key];
+      if (tip && !confirm(tip)) return;
+    }
+
     setBusy(true);
     setMsg("");
     const res = await fetch(`/api/admin/inquiries/${id}`, {

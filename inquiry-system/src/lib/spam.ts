@@ -186,7 +186,7 @@ export function scoreSpam(input: SpamInput): SpamResult {
   return { score: Math.min(100, score), hits };
 }
 
-/** Mid band: needs human review. Below this goes straight to client. */
-export function reviewBandLow(threshold: number) {
-  return Math.max(40, Math.floor(threshold * 0.5));
+/** 进入人工审核的最低分：≥ 该分且未达自动垃圾阈值 → review；低于则直发 */
+export function reviewBandLow(_threshold?: number) {
+  return Number(process.env.REVIEW_SCORE_MIN || 20);
 }

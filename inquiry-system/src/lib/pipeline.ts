@@ -1,7 +1,8 @@
 import { randomBytes } from "crypto";
 import { prisma } from "./prisma";
-import { InquiryStatus, spamThreshold } from "./constants";
-import { scoreSpam, reviewBandLow } from "./spam";
+import { InquiryStatus } from "./constants";
+import { scoreSpam } from "./spam";
+import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
 import { extractHiddenFields } from "./wp-fields";
 
@@ -149,8 +150,9 @@ export async function ingestInquiry(body: IngestBody) {
     degraded = true;
   }
 
-  const threshold = spamThreshold();
-  const midLow = reviewBandLow(threshold);
+  const routing = await getSpamRoutingConfig();
+  const threshold = routing.autoSpamMin;
+  const midLow = routing.reviewMin;
 
   let status: string = InquiryStatus.PENDING;
   let reviewEnteredAt: Date | null = null;

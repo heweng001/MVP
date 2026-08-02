@@ -37,7 +37,7 @@ export const STATUS_LABELS: Record<string, string> = {
 /** 询盘状态 / 列表页签悬停说明 */
 export const STATUS_HINTS: Record<string, string> = {
   all: "显示当前筛选条件下的所有询盘。",
-  review: "垃圾分处于中间带，需人工通过发送或驳回；超过 6 小时未处理将自动发给客户。",
+  review: "垃圾分达到人工审核阈值且未达自动拦截阈值，需人工通过发送或驳回；超过 6 小时未处理将自动发给客户。",
   spam: "未发给客户的垃圾询盘：含系统自动判定的「自动垃圾」，以及管理员驳回/手动标记的「审核垃圾」。",
   auto_spam: "系统按垃圾分自动判定为明显垃圾，未发给客户；可补发。",
   review_spam: "管理员在待审核中驳回，或对未转发询盘手动标为垃圾。",

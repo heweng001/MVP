@@ -1,17 +1,21 @@
 import { PageHeader } from "@/components/PageHeader";
 import { SmtpSettingsForm } from "@/components/SmtpSettingsForm";
-import { getSmtpConfigForAdmin } from "@/lib/settings";
+import { SpamRoutingSettingsForm } from "@/components/SpamRoutingSettingsForm";
+import { getSmtpConfigForAdmin, getSpamRoutingConfig } from "@/lib/settings";
 
 export default async function SettingsPage() {
-  const smtp = await getSmtpConfigForAdmin();
+  const [smtp, spamRouting] = await Promise.all([
+    getSmtpConfigForAdmin(),
+    getSpamRoutingConfig(),
+  ]);
 
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title="发件设置"
         hint={
           <div className="space-y-1.5">
-            <p>配置系统代发询盘邮件所用的 SMTP 账号与发件人地址。</p>
+            <p>配置系统代发询盘邮件所用的 SMTP 账号与发件人地址，以及垃圾分流转分数阈值。</p>
             <p>
               收件人/抄送在各网站「配置对接」里设置；这里只配置<strong>用哪个邮箱发出</strong>。
             </p>
@@ -31,6 +35,12 @@ export default async function SettingsPage() {
           hasPassword: smtp.hasPassword,
           configured: smtp.configured,
           source: smtp.source,
+        }}
+      />
+      <SpamRoutingSettingsForm
+        initial={{
+          autoSpamMin: spamRouting.autoSpamMin,
+          reviewMin: spamRouting.reviewMin,
         }}
       />
     </div>
