@@ -129,7 +129,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     <p><strong>请协助标记本封询盘（用于月度有效询盘统计）：</strong></p>
     <p>
       <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">有效询盘</a>
-      <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">垃圾/无效</a>
+      <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">无效</a>
     </p>
     <p style="color:#888;font-size:12px;">点击按钮将立即完成标记；发信后 72 小时内可返回页面修改。</p>
   </div>`;
@@ -146,7 +146,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     "",
     "请协助标记本封询盘（点击链接即完成标记）：",
     `有效询盘：${validUrl}`,
-    `垃圾/无效：${invalidUrl}`,
+    `无效：${invalidUrl}`,
   ].join("\n");
 
   if (!transport) {

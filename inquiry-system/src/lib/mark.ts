@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { InquiryStatus, markHours } from "./constants";
+import { InquiryStatus, markHours, isSpamStatus } from "./constants";
 
 export type MarkAction = "valid" | "invalid";
 
@@ -32,10 +32,7 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
   const inquiry = await getInquiryByToken(token);
   if (!inquiry) return { ok: false as const, error: "无效链接" };
 
-  if (
-    inquiry.status === InquiryStatus.AUTO_SPAM ||
-    inquiry.status === InquiryStatus.REVIEW
-  ) {
+  if (isSpamStatus(inquiry.status) || inquiry.status === InquiryStatus.REVIEW) {
     return { ok: false as const, error: "该询盘未发送给客户，无法标记。" };
   }
 

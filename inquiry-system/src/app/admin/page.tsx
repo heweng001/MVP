@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { siteMonthStats } from "@/lib/stats";
+import {
+  emptySiteStat,
+  prevMonth,
+  siteMonthStats,
+  sumSiteStats,
+} from "@/lib/stats";
 import { PageHeader } from "@/components/PageHeader";
+import { StatsFunnel } from "@/components/StatsFunnel";
+import { StatsSiteTable } from "@/components/StatsSiteTable";
 import Link from "next/link";
-
-function pct(n: number) {
-  return `${(n * 100).toFixed(1)}%`;
-}
 
 export default async function AdminHome({
   searchParams,
@@ -16,50 +19,44 @@ export default async function AdminHome({
   const now = new Date();
   const year = Number(sp.year || now.getFullYear());
   const month = Number(sp.month || now.getMonth() + 1);
+  const prev = prevMonth(year, month);
 
-  const stats = await siteMonthStats(undefined, year, month);
-  const sites = await prisma.site.findMany({
-    include: { client: true },
-  });
-  const siteMap = new Map(sites.map((s) => [s.id, s]));
+  const [statsRaw, prevStats, sites] = await Promise.all([
+    siteMonthStats(undefined, year, month),
+    siteMonthStats(undefined, prev.year, prev.month),
+    prisma.site.findMany({ include: { client: true }, orderBy: { domain: "asc" } }),
+  ]);
 
-  const reviewCount = await prisma.inquiry.count({ where: { status: "review" } });
-  const pendingCount = await prisma.inquiry.count({ where: { status: "pending" } });
-
-  const totals = stats.reduce(
-    (acc, s) => {
-      acc.total += s.total;
-      acc.forwarded += s.forwarded;
-      acc.effective += s.effective;
-      acc.autoSpam += s.autoSpam;
-      acc.valid += s.valid;
-      acc.timeoutUnmarked += s.timeoutUnmarked;
-      acc.invalid += s.invalid;
-      return acc;
-    },
-    {
-      total: 0,
-      forwarded: 0,
-      effective: 0,
-      autoSpam: 0,
-      valid: 0,
-      timeoutUnmarked: 0,
-      invalid: 0,
-    },
+  const bySite = new Map(statsRaw.map((s) => [s.siteId, s]));
+  const prevBySite: Record<string, (typeof prevStats)[number]> = Object.fromEntries(
+    prevStats.map((s) => [s.siteId, s]),
   );
 
+  // 全部网站都进列表（无询盘的补零）
+  const stats = sites.map((site) => {
+    const s = bySite.get(site.id) || emptySiteStat(site.id);
+    return {
+      ...s,
+      siteId: site.id,
+      domain: site.domain,
+      clientName: site.client.name,
+    };
+  });
+
+  // 漏斗只用真实有数据的合计即可（补零站点不影响）
+  const totals = sumSiteStats(stats);
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="统计概览"
         hint={
           <div className="space-y-1.5">
-            <p>有效占比 = (客户标有效 + 超时未标记) / 已转发数 · 时区 Asia/Shanghai</p>
             <p>
-              <strong>已转发</strong>：已成功发给客户。
-              <strong className="ml-1">有效合计</strong>：客户点「有效」+「超时未标记」（发信后 72
-              小时未点）。
-              <strong className="ml-1">自动拦截</strong>：明显垃圾，未发给客户。
+              有效占比 = (标记有效 + 待标记 + 超时未标记) / 已转发 × 100%
+            </p>
+            <p>
+              「拦截」= 自动垃圾 + 审核垃圾。漏斗含「待标记+超时未标记+有效」层；列表含全部网站，默认按提交降序。
             </p>
           </div>
         }
@@ -100,87 +97,9 @@ export default async function AdminHome({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "本月提交", value: totals.total },
-          { label: "已转发", value: totals.forwarded },
-          {
-            label: "有效合计",
-            value: totals.effective,
-            sub: totals.forwarded ? pct(totals.effective / totals.forwarded) : "—",
-          },
-          { label: "自动拦截", value: totals.autoSpam },
-          { label: "客户标有效", value: totals.valid },
-          { label: "超时未标记", value: totals.timeoutUnmarked },
-          { label: "客户标无效", value: totals.invalid },
-          {
-            label: "当前待审核 / 待标记",
-            value: `${reviewCount}/${pendingCount}`,
-          },
-        ].map((c) => (
-          <div
-            key={c.label}
-            className="bg-[var(--panel)] border border-[var(--line)] rounded-lg px-4 py-3 shadow-sm"
-          >
-            <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{c.label}</div>
-            <div className="text-2xl font-semibold tracking-tight mt-1 tabular-nums">{c.value}</div>
-            {"sub" in c && c.sub ? (
-              <div className="text-xs text-[var(--brand)] mt-1">有效占比 {c.sub}</div>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      <StatsFunnel current={totals} year={year} month={month} />
 
-      <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg overflow-hidden shadow-sm">
-        <div className="px-4 py-3 border-b border-[var(--line)] text-[13px] font-medium">
-          {year}年{month}月 · 按站点
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">站点</th>
-                <th className="px-4 py-2.5 font-medium">客户</th>
-                <th className="px-4 py-2.5 font-medium">提交</th>
-                <th className="px-4 py-2.5 font-medium">拦截</th>
-                <th className="px-4 py-2.5 font-medium">已转发</th>
-                <th className="px-4 py-2.5 font-medium">有效</th>
-                <th className="px-4 py-2.5 font-medium">超时未标</th>
-                <th className="px-4 py-2.5 font-medium">无效</th>
-                <th className="px-4 py-2.5 font-medium">有效占比</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-[var(--muted)]">
-                    本月暂无数据
-                  </td>
-                </tr>
-              ) : (
-                stats.map((s) => {
-                  const site = siteMap.get(s.siteId);
-                  return (
-                    <tr key={s.siteId} className="border-t border-[var(--line)]">
-                      <td className="px-4 py-2">{site?.domain || s.siteId}</td>
-                      <td className="px-4 py-2">{site?.client.name || "—"}</td>
-                      <td className="px-4 py-2">{s.total}</td>
-                      <td className="px-4 py-2">{s.autoSpam}</td>
-                      <td className="px-4 py-2">{s.forwarded}</td>
-                      <td className="px-4 py-2">{s.valid}</td>
-                      <td className="px-4 py-2">{s.timeoutUnmarked}</td>
-                      <td className="px-4 py-2">{s.invalid}</td>
-                      <td className="px-4 py-2 font-medium">
-                        {s.forwarded ? pct(s.effectiveRate) : "—"}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <StatsSiteTable year={year} month={month} stats={stats} prevBySite={prevBySite} />
     </div>
   );
 }

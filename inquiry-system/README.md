@@ -35,11 +35,13 @@ curl -X POST "https://你的域名/api/cron" -H "x-cron-secret: 你的CRON_SECRE
 
 用于：待审超过 6 小时自动发信；发信超过 72 小时未标记 → `timeout_unmarked`。
 
-## 有效占比
+## 有效占比与拦截
 
 ```
-有效询盘数 = valid + timeout_unmarked
-有效占比   = 有效询盘数 / 已转发数
+拦截       = auto_spam + review_spam
+待标记     = pending（窗口内未点）
+超时未标记 = timeout_unmarked
+有效占比   = (标记有效 + 待标记 + 超时未标记) / 已转发 × 100%
 ```
 
 ## 生产部署

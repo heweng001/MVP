@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
+import { InquiryStatus, STATUS_HINTS, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -35,6 +35,8 @@ export function InquiryListBoard({
   showStatusColumn,
   filterQuery,
   siteId,
+  year,
+  month,
   sites,
 }: {
   tab: string;
@@ -43,6 +45,8 @@ export function InquiryListBoard({
   showStatusColumn: boolean;
   filterQuery: string;
   siteId: string;
+  year?: number;
+  month?: number;
   sites: { id: string; domain: string }[];
 }) {
   const router = useRouter();
@@ -52,7 +56,6 @@ export function InquiryListBoard({
 
   const ids = useMemo(() => items.map((i) => i.id), [items]);
   const allChecked = ids.length > 0 && ids.every((id) => selected.has(id));
-  const activeHint = tabs.find((t) => t.key === tab)?.hint || "";
 
   function toggleAll() {
     if (allChecked) setSelected(new Set());
@@ -73,6 +76,8 @@ export function InquiryListBoard({
     params.set("tab", nextTab);
     if (siteId) params.set("siteId", siteId);
     if (filterQuery) params.set("q", filterQuery);
+    if (year != null) params.set("year", String(year));
+    if (month != null) params.set("month", String(month));
     return `/admin/inquiries?${params.toString()}`;
   }
 
@@ -118,6 +123,8 @@ export function InquiryListBoard({
         actions={
           <form className="flex flex-wrap gap-1.5 items-center text-xs">
             <input type="hidden" name="tab" value={tab} />
+            {year != null ? <input type="hidden" name="year" value={year} /> : null}
+            {month != null ? <input type="hidden" name="month" value={month} /> : null}
             <select
               name="siteId"
               defaultValue={siteId}
@@ -137,6 +144,11 @@ export function InquiryListBoard({
               className="border border-[var(--line)] rounded-md px-1.5 py-1 min-w-[160px] bg-white"
             />
             <button className="bg-[var(--brand)] text-white rounded-md px-2.5 py-1">筛选</button>
+            {year != null && month != null ? (
+              <span className="text-[var(--muted)]">
+                已限定 {year}-{String(month).padStart(2, "0")}
+              </span>
+            ) : null}
           </form>
         }
       />
@@ -144,27 +156,32 @@ export function InquiryListBoard({
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
         {tabs.map((t) => {
           const active = t.key === tab;
+          const tip = t.hint || STATUS_HINTS[t.key] || "";
           return (
-            <Link
-              key={t.key}
-              href={hrefFor(t.key)}
-              className={`px-2.5 py-1.5 text-xs rounded-t-md border border-b-0 -mb-px ${
-                active
-                  ? "bg-white border-[var(--line)] text-[var(--brand)] font-medium"
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
-              }`}
-              title={t.hint}
-            >
-              {t.label}
-              <span className="ml-1 tabular-nums">{t.count}</span>
-            </Link>
+            <span key={t.key} className="relative group/tab">
+              <Link
+                href={hrefFor(t.key)}
+                className={`inline-block px-2.5 py-1.5 text-xs rounded-t-md border border-b-0 -mb-px ${
+                  active
+                    ? "bg-white border-[var(--line)] text-[var(--brand)] font-medium"
+                    : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
+                }`}
+              >
+                {t.label}
+                <span className="ml-1 tabular-nums">{t.count}</span>
+              </Link>
+              {tip ? (
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-40 mt-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--ink)] shadow-lg opacity-0 invisible group-hover/tab:opacity-100 group-hover/tab:visible transition-opacity"
+                >
+                  {tip}
+                </span>
+              ) : null}
+            </span>
           );
         })}
       </div>
-
-      {activeHint ? (
-        <p className="text-[11px] text-[var(--muted)] leading-relaxed -mt-1">{activeHint}</p>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5 text-xs bg-white border border-[var(--line)] rounded-lg px-2.5 py-2">
         <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
@@ -280,7 +297,20 @@ export function InquiryListBoard({
                     <td className="px-2 py-1 whitespace-nowrap">{item.spamScore}</td>
                     {showStatusColumn ? (
                       <td className="px-2 py-1 whitespace-nowrap">
-                        {STATUS_LABELS[item.status] || item.status}
+                        <span
+                          className="relative group/status cursor-default border-b border-dotted border-[var(--muted)]/50"
+                          tabIndex={0}
+                        >
+                          {STATUS_LABELS[item.status] || item.status}
+                          {STATUS_HINTS[item.status] ? (
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute left-0 top-full z-40 mt-1.5 w-56 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--ink)] shadow-lg opacity-0 invisible group-hover/status:opacity-100 group-hover/status:visible group-focus-within/status:opacity-100 group-focus-within/status:visible transition-opacity"
+                            >
+                              {STATUS_HINTS[item.status]}
+                            </span>
+                          ) : null}
+                        </span>
                       </td>
                     ) : null}
                     <td className="px-2 py-1 max-w-[360px]">

@@ -33,7 +33,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
       />
 
       <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg p-4 space-y-3 shadow-sm">
-        <InquiryActions id={item.id} mode="detail" />
+        <InquiryActions id={item.id} mode="detail" forwarded={Boolean(item.sentAt)} />
         <dl className="grid md:grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-[var(--muted)]">提交时间</dt>

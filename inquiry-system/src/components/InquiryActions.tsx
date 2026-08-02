@@ -7,10 +7,13 @@ export function InquiryActions({
   id,
   mode,
   compact = false,
+  forwarded = false,
 }: {
   id: string;
   mode: "review" | "detail";
   compact?: boolean;
+  /** 已转发则不可标垃圾（回撤） */
+  forwarded?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -79,13 +82,15 @@ export function InquiryActions({
           >
             无效
           </button>
-          <button
-            disabled={busy}
-            onClick={() => run("set_status", { status: "auto_spam" })}
-            className={`${btn} bg-[var(--danger)] text-white`}
-          >
-            垃圾
-          </button>
+          {!forwarded ? (
+            <button
+              disabled={busy}
+              onClick={() => run("set_status", { status: "review_spam" })}
+              className={`${btn} bg-[var(--danger)] text-white`}
+            >
+              垃圾
+            </button>
+          ) : null}
         </>
       )}
       {msg ? <span className="text-[11px] text-[var(--danger)]">{msg}</span> : null}

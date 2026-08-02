@@ -39,21 +39,26 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      if (action === "auto_spam") {
+        const row = await prisma.inquiry.findUnique({ where: { id } });
+        if (!row) throw new Error("不存在");
+        if (row.sentAt) throw new Error("已转发不可标垃圾");
+        await prisma.inquiry.update({
+          where: { id },
+          data: { status: InquiryStatus.REVIEW_SPAM },
+        });
+        ok++;
+        continue;
+      }
+
       const status =
-        action === "valid"
-          ? InquiryStatus.VALID
-          : action === "invalid"
-            ? InquiryStatus.INVALID
-            : InquiryStatus.AUTO_SPAM;
+        action === "valid" ? InquiryStatus.VALID : InquiryStatus.INVALID;
 
       await prisma.inquiry.update({
         where: { id },
         data: {
           status,
-          markedAt:
-            status === InquiryStatus.VALID || status === InquiryStatus.INVALID
-              ? new Date()
-              : undefined,
+          markedAt: new Date(),
         },
       });
       ok++;

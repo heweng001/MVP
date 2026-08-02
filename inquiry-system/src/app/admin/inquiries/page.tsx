@@ -1,14 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { InquiryStatus } from "@/lib/constants";
 import { InquiryListBoard } from "@/components/InquiryListBoard";
+import { monthRange } from "@/lib/stats";
 import { format } from "date-fns";
+import type { Prisma } from "@prisma/client";
 
 const TABS = [
   {
     key: "all",
     label: "全部",
     status: "",
-    hint: "显示当前筛选条件下的所有询盘，包含下方各状态；超时未标记也会出现在这里。",
+    hint: "显示当前筛选条件下的所有询盘，包含下方各状态。",
   },
   {
     key: "review",
@@ -17,39 +19,51 @@ const TABS = [
     hint: "垃圾分处于中间带，系统不敢自动拦截也不直接转发。需人工「通过发送」或「驳回」。超过 6 小时未处理将自动发给客户。",
   },
   {
-    key: "auto_spam",
-    label: "自动垃圾",
-    status: InquiryStatus.AUTO_SPAM,
-    hint: "系统判定为明显垃圾（或待审核中被驳回），未发给客户。仅后台可查，可批量改状态或补发（补发后会发给客户）。",
+    key: "spam",
+    label: "垃圾",
+    status: "",
+    hint: "未发给客户的垃圾询盘：含系统自动判定的「自动垃圾」，以及管理员驳回/手动标记的「审核垃圾」。",
+  },
+  {
+    key: "forwarded",
+    label: "已转发",
+    status: "",
+    hint: "已成功发给客户的询盘（含待标记、超时未标记、有效、无效）。",
   },
   {
     key: "pending",
     label: "待标记",
     status: InquiryStatus.PENDING,
-    hint: "已成功发给客户，且仍在发信后 72 小时内，等待客户在邮件中点击有效/无效（期间也可改判）。",
-  },
-  {
-    key: "valid",
-    label: "已标记有效",
-    status: InquiryStatus.VALID,
-    hint: "客户（或管理员）已标记为有效询盘，计入月度有效数。",
-  },
-  {
-    key: "invalid",
-    label: "已标记无效",
-    status: InquiryStatus.INVALID,
-    hint: "客户（或管理员）已标记为垃圾/无效，不计入有效询盘。",
+    hint: "已转发且仍在标记窗口内，等待客户点有效/无效。",
   },
   {
     key: "timeout_unmarked",
     label: "超时未标记",
     status: InquiryStatus.TIMEOUT_UNMARKED,
-    hint: "发信成功起算已满 72 小时，客户未做任何标记。状态保持为「超时未标记」（不会自动改成有效），但月度统计时计入有效询盘数。",
+    hint: "发信已满 72 小时仍未标记。",
+  },
+  {
+    key: "valid",
+    label: "已标记有效",
+    status: InquiryStatus.VALID,
+    hint: "客户（或管理员）已标记为有效询盘。",
+  },
+  {
+    key: "invalid",
+    label: "已标记无效",
+    status: InquiryStatus.INVALID,
+    hint: "客户（或管理员）已标记为无效。",
   },
 ] as const;
 
 function tabFromParam(tab: string | undefined, status: string | undefined) {
+  // 兼容旧「未标记」聚合页签
+  if (tab === "unmarked") return "pending";
+  if (tab === "auto_spam" || tab === "review_spam") return "spam";
   if (tab && TABS.some((t) => t.key === tab)) return tab;
+  if (status === InquiryStatus.AUTO_SPAM || status === InquiryStatus.REVIEW_SPAM) {
+    return "spam";
+  }
   if (status) {
     const hit = TABS.find((t) => t.status === status);
     if (hit) return hit.key;
@@ -57,19 +71,51 @@ function tabFromParam(tab: string | undefined, status: string | undefined) {
   return "all";
 }
 
+function tabWhere(tab: string): Prisma.InquiryWhereInput {
+  if (tab === "forwarded") return { sentAt: { not: null } };
+  if (tab === "spam") {
+    return {
+      status: { in: [InquiryStatus.AUTO_SPAM, InquiryStatus.REVIEW_SPAM] },
+    };
+  }
+  const tabDef = TABS.find((t) => t.key === tab);
+  if (tabDef?.status) return { status: tabDef.status };
+  return {};
+}
+
 export default async function InquiriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; status?: string; q?: string; siteId?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    status?: string;
+    q?: string;
+    siteId?: string;
+    year?: string;
+    month?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const tab = tabFromParam(sp.tab, sp.status);
   const q = (sp.q || "").trim();
   const siteId = sp.siteId || "";
-  const tabDef = TABS.find((t) => t.key === tab) || TABS[0];
+  const year = sp.year ? Number(sp.year) : undefined;
+  const month = sp.month ? Number(sp.month) : undefined;
+  const hasMonth =
+    year != null &&
+    month != null &&
+    Number.isFinite(year) &&
+    Number.isFinite(month) &&
+    month >= 1 &&
+    month <= 12;
 
-  const baseWhere = {
+  const monthFilter = hasMonth ? monthRange(year!, month!) : null;
+
+  const baseWhere: Prisma.InquiryWhereInput = {
     ...(siteId ? { siteId } : {}),
+    ...(monthFilter
+      ? { submittedAt: { gte: monthFilter.start, lt: monthFilter.end } }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -83,18 +129,26 @@ export default async function InquiriesPage({
       : {}),
   };
 
-  const [sites, countsRaw, items] = await Promise.all([
+  const extraWhere = tabWhere(tab);
+
+  const [sites, countsRaw, forwardedCount, spamCount, items] = await Promise.all([
     prisma.site.findMany({ orderBy: { domain: "asc" } }),
     prisma.inquiry.groupBy({
       by: ["status"],
       where: baseWhere,
       _count: { _all: true },
     }),
-    prisma.inquiry.findMany({
+    prisma.inquiry.count({
+      where: { ...baseWhere, sentAt: { not: null } },
+    }),
+    prisma.inquiry.count({
       where: {
         ...baseWhere,
-        ...(tabDef.status ? { status: tabDef.status } : {}),
+        status: { in: [InquiryStatus.AUTO_SPAM, InquiryStatus.REVIEW_SPAM] },
       },
+    }),
+    prisma.inquiry.findMany({
+      where: { ...baseWhere, ...extraWhere },
       orderBy:
         tab === "review"
           ? [{ reviewEnteredAt: "asc" }, { submittedAt: "asc" }]
@@ -114,16 +168,25 @@ export default async function InquiriesPage({
     label: t.label,
     status: t.status,
     hint: t.hint,
-    count: t.key === "all" ? totalCount : countByStatus[t.status] || 0,
+    count:
+      t.key === "all"
+        ? totalCount
+        : t.key === "forwarded"
+          ? forwardedCount
+          : t.key === "spam"
+            ? spamCount
+            : countByStatus[t.status] || 0,
   }));
 
   return (
     <InquiryListBoard
       tab={tab}
       tabs={tabs}
-      showStatusColumn={tab === "all"}
+      showStatusColumn={tab === "all" || tab === "forwarded" || tab === "spam"}
       filterQuery={q}
       siteId={siteId}
+      year={hasMonth ? year : undefined}
+      month={hasMonth ? month : undefined}
       sites={sites.map((s) => ({ id: s.id, domain: s.domain }))}
       items={items.map((item) => ({
         id: item.id,

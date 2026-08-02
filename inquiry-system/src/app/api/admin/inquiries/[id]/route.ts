@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     const updated = await prisma.inquiry.update({
       where: { id },
-      data: { status: InquiryStatus.AUTO_SPAM, notes: inquiry.notes + "\n审核驳回" },
+      data: { status: InquiryStatus.REVIEW_SPAM, notes: inquiry.notes + "\n审核驳回" },
     });
     return NextResponse.json({ ok: true, inquiry: updated });
   }
@@ -42,10 +42,24 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   if (action === "set_status") {
-    const status = String(body.status || "");
+    let status = String(body.status || "");
+    // 管理员手动标垃圾 → 审核垃圾（与系统自动垃圾区分）
+    if (status === InquiryStatus.AUTO_SPAM) {
+      status = InquiryStatus.REVIEW_SPAM;
+    }
     const allowed = Object.values(InquiryStatus);
     if (!allowed.includes(status as (typeof allowed)[number])) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+    // 已转发不可回撤为垃圾（避免把已发客户的询盘改回未发送垃圾）
+    if (
+      (status === InquiryStatus.REVIEW_SPAM || status === InquiryStatus.AUTO_SPAM) &&
+      inquiry.sentAt
+    ) {
+      return NextResponse.json(
+        { error: "已转发的询盘不可标为垃圾；如需否定请标为「无效」。" },
+        { status: 400 },
+      );
     }
     const updated = await prisma.inquiry.update({
       where: { id },

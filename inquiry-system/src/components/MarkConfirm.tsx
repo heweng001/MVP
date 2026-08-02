@@ -186,7 +186,7 @@ export function MarkConfirm({
                 onClick={() => submitMark("invalid")}
                 className="bg-[var(--warn)] text-white rounded-md px-4 py-2 text-sm disabled:opacity-50"
               >
-                垃圾/无效
+                无效
               </button>
             </>
           )}
