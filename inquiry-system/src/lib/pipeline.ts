@@ -3,7 +3,7 @@ import { prisma } from "./prisma";
 import { InquiryStatus, spamThreshold } from "./constants";
 import { scoreSpam, reviewBandLow } from "./spam";
 import { parseEmails, sendInquiryEmail } from "./email";
-import { extractHiddenFields, extractGeoInfo, extractUserJourney, formatGeoInfo } from "./wp-fields";
+import { extractHiddenFields } from "./wp-fields";
 
 export type IngestBody = {
   site_key: string;
@@ -16,8 +16,6 @@ export type IngestBody = {
   message?: string;
   page_url?: string;
   fields?: Record<string, unknown>;
-  user_journey?: unknown;
-  location?: unknown;
 };
 
 function token() {
@@ -68,9 +66,6 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     label: f.label,
     value: f.value,
   }));
-  const userJourney = extractUserJourney(inquiry.rawPayload);
-  const geo = extractGeoInfo(inquiry.rawPayload);
-  const locationSummary = geo ? formatGeoInfo(geo) : "";
   const sent = await sendInquiryEmail({
     to: recipients.to,
     cc: recipients.cc,
@@ -86,8 +81,6 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     formId: inquiry.formId,
     entryId: inquiry.entryId,
     hiddenFields,
-    userJourney,
-    locationSummary,
   });
   if (sent.skipped) {
     throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");
@@ -179,11 +172,7 @@ export async function ingestInquiry(body: IngestBody) {
       subject,
       message,
       pageUrl,
-      rawPayload: JSON.stringify({
-        fields: body.fields ?? {},
-        user_journey: body.user_journey ?? null,
-        location: body.location ?? null,
-      }),
+      rawPayload: JSON.stringify(body.fields ?? body),
       spamScore: spam.score,
       spamHits: JSON.stringify(spam.hits),
       markToken: token(),

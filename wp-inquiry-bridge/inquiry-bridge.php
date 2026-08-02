@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.1.0
+ * Version: 1.0.2
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -23,8 +23,8 @@ final class Inquiry_Bridge_Plugin
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
 
-        // Entry saved；优先级略后，便于读取 Geolocation / User Journey 的 entry meta
-        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 25, 4);
+        // Entry saved, before notification emails (preferred timing).
+        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 5, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -156,93 +156,6 @@ final class Inquiry_Bridge_Plugin
         return '';
     }
 
-    /** @return object|null */
-    private static function entry_meta_handler()
-    {
-        if (!function_exists('wpforms')) {
-            return null;
-        }
-        $wpforms = wpforms();
-        if (is_object($wpforms) && method_exists($wpforms, 'obj')) {
-            $h = $wpforms->obj('entry_meta');
-            if ($h) {
-                return $h;
-            }
-        }
-        if (!empty($wpforms->entry_meta)) {
-            return $wpforms->entry_meta;
-        }
-        return null;
-    }
-
-    private static function get_entry_meta_data($entry_id, $type)
-    {
-        $handler = self::entry_meta_handler();
-        if (!$handler || !method_exists($handler, 'get_meta')) {
-            return null;
-        }
-        $entry_id = absint($entry_id);
-        if (!$entry_id) {
-            return null;
-        }
-
-        $meta = $handler->get_meta(
-            [
-                'entry_id' => $entry_id,
-                'type' => $type,
-                'number' => 1,
-            ]
-        );
-        if (empty($meta[0]->data)) {
-            $meta = $handler->get_meta(
-                [
-                    'entry_id' => $entry_id,
-                    'type' => $type,
-                ]
-            );
-        }
-        if (empty($meta[0]->data)) {
-            return null;
-        }
-
-        $data = $meta[0]->data;
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                return $decoded;
-            }
-            // maybe serialized PHP
-            $un = maybe_unserialize($data);
-            if ($un !== $data) {
-                return $un;
-            }
-            return $data;
-        }
-        return $data;
-    }
-
-    private static function collect_user_journey($entry_id)
-    {
-        foreach (['user_journey', 'user-journey', 'journey'] as $type) {
-            $data = self::get_entry_meta_data($entry_id, $type);
-            if (!empty($data)) {
-                return $data;
-            }
-        }
-        return null;
-    }
-
-    private static function collect_location($entry_id)
-    {
-        foreach (['location', 'geolocation', 'geo'] as $type) {
-            $data = self::get_entry_meta_data($entry_id, $type);
-            if (!empty($data)) {
-                return $data;
-            }
-        }
-        return null;
-    }
-
     public static function on_entry_saved($fields, $entry, $form_data, $entry_id)
     {
         $settings = self::settings();
@@ -285,9 +198,7 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        $user_journey = self::collect_user_journey($entry_id);
-        $location = self::collect_location($entry_id);
-
+        // fields 含全部 WPForms 字段（含 Hidden）；中心系统从中解析 Hidden
         $payload = [
             'site_key' => $settings['site_key'],
             'form_id' => (string) $form_id,
@@ -299,8 +210,6 @@ final class Inquiry_Bridge_Plugin
             'message' => $message,
             'page_url' => $page_url,
             'fields' => $fields,
-            'user_journey' => $user_journey,
-            'location' => $location,
         ];
 
         $response = wp_remote_post($settings['api_url'], [
