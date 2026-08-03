@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,6 +14,7 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
+    const RETRY_HOOK = 'inquiry_bridge_retry_meta';
 
     public static function init()
     {
@@ -23,8 +24,10 @@ final class Inquiry_Bridge_Plugin
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
 
-        // 稍晚执行，便于 Geolocation / User Journey Addon 先写入 entry meta
-        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 30, 4);
+        // 尽量晚执行；Location / User Journey 常在 entry_saved 中写入
+        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 999, 4);
+        add_action('wpforms_process_complete', [__CLASS__, 'on_process_complete'], 20, 4);
+        add_action(self::RETRY_HOOK, [__CLASS__, 'retry_meta_push'], 10, 1);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -194,40 +197,128 @@ final class Inquiry_Bridge_Plugin
     }
 
     /**
-     * 按 type 列表读取 entry meta（Location / User Journey 等板块）
+     * 按 type 列表读取 entry meta；兼容 get_meta 返回对象/数组，并回退直查数据表
      */
     private static function get_entry_meta_data($entry_id, array $types)
     {
-        $handler = self::entry_meta_handler();
-        if (!$handler || !method_exists($handler, 'get_meta')) {
-            return null;
-        }
         $entry_id = absint($entry_id);
         if (!$entry_id) {
             return null;
         }
 
-        foreach ($types as $type) {
-            $meta = $handler->get_meta(
-                [
-                    'entry_id' => $entry_id,
-                    'type' => $type,
-                    'number' => 1,
-                ]
-            );
-            if (empty($meta[0]->data)) {
+        $handler = self::entry_meta_handler();
+        if ($handler && method_exists($handler, 'get_meta')) {
+            foreach ($types as $type) {
+                $meta = $handler->get_meta(
+                    [
+                        'entry_id' => $entry_id,
+                        'type' => $type,
+                        'number' => 1,
+                    ]
+                );
+                $data = self::meta_row_data($meta);
+                if ($data !== null && $data !== '' && $data !== []) {
+                    return self::decode_meta_data($data);
+                }
                 $meta = $handler->get_meta(
                     [
                         'entry_id' => $entry_id,
                         'type' => $type,
                     ]
                 );
+                $data = self::meta_row_data($meta);
+                if ($data !== null && $data !== '' && $data !== []) {
+                    return self::decode_meta_data($data);
+                }
             }
-            if (!empty($meta[0]->data)) {
-                return self::decode_meta_data($meta[0]->data);
+        }
+
+        // 直查 wpforms_entry_meta，避免 API 类型名不一致或尚未缓存
+        $from_db = self::get_entry_meta_from_db($entry_id, $types);
+        if ($from_db !== null) {
+            return $from_db;
+        }
+        return null;
+    }
+
+    /** @param mixed $meta */
+    private static function meta_row_data($meta)
+    {
+        if (empty($meta)) {
+            return null;
+        }
+        if (is_object($meta) && isset($meta->data)) {
+            return $meta->data;
+        }
+        if (is_array($meta)) {
+            if (isset($meta[0]) && is_object($meta[0]) && isset($meta[0]->data)) {
+                return $meta[0]->data;
+            }
+            if (isset($meta['data'])) {
+                return $meta['data'];
             }
         }
         return null;
+    }
+
+    private static function get_entry_meta_from_db($entry_id, array $types)
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'wpforms_entry_meta';
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if (!$exists) {
+            return null;
+        }
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results(
+            $wpdb->prepare("SELECT type, data FROM `{$table}` WHERE entry_id = %d", $entry_id),
+            ARRAY_A
+        );
+        if (empty($rows)) {
+            return null;
+        }
+
+        $wanted = array_map('strtolower', $types);
+        foreach ($rows as $row) {
+            $type = strtolower((string) ($row['type'] ?? ''));
+            if (!in_array($type, $wanted, true)) {
+                // 模糊匹配：含 location / journey / geo
+                $hit = false;
+                foreach ($wanted as $w) {
+                    if ($w !== '' && strpos($type, $w) !== false) {
+                        $hit = true;
+                        break;
+                    }
+                }
+                if (!$hit) {
+                    continue;
+                }
+            }
+            $decoded = self::decode_meta_data($row['data'] ?? null);
+            if ($decoded !== null && $decoded !== '' && $decoded !== []) {
+                return $decoded;
+            }
+        }
+        return null;
+    }
+
+    /** 用 WPForms Smart Tag 生成与后台条目页一致的展示内容 */
+    private static function collect_via_smart_tags($form_data, $fields, $entry_id)
+    {
+        $out = ['geo' => '', 'journey' => ''];
+        if (!function_exists('wpforms_process_smart_tags')) {
+            return $out;
+        }
+        $geo = (string) wpforms_process_smart_tags('{entry_geolocation}', $form_data, $fields, $entry_id);
+        $journey = (string) wpforms_process_smart_tags('{entry_user_journey}', $form_data, $fields, $entry_id);
+        if (strpos($geo, '{entry_geolocation}') === false) {
+            $out['geo'] = trim($geo);
+        }
+        if (strpos($journey, '{entry_user_journey}') === false) {
+            $out['journey'] = trim($journey);
+        }
+        return $out;
     }
 
     /** 从 WPForms Location / Geolocation 板块读取 */
@@ -238,6 +329,7 @@ final class Inquiry_Bridge_Plugin
             'geolocation',
             'geo_location',
             'entry_geolocation',
+            'geo',
         ]);
     }
 
@@ -252,6 +344,28 @@ final class Inquiry_Bridge_Plugin
             'journey',
             'entry_user_journey',
         ]);
+    }
+
+    /** 组装 location + journey 文本（优先 Smart Tag，再板块 meta） */
+    private static function build_location_journey($entry_id, $form_data, $fields)
+    {
+        $tags = self::collect_via_smart_tags($form_data, $fields, $entry_id);
+        $location_raw = self::collect_location($entry_id);
+        $journey_raw = self::collect_user_journey($entry_id);
+
+        $entry_geolocation = $tags['geo'] !== ''
+            ? $tags['geo']
+            : self::format_location_text($location_raw);
+        $entry_user_journey = $tags['journey'] !== ''
+            ? $tags['journey']
+            : self::format_user_journey_html($journey_raw);
+
+        return [
+            'location_raw' => $location_raw,
+            'journey_raw' => $journey_raw,
+            'entry_geolocation' => $entry_geolocation,
+            'entry_user_journey' => $entry_user_journey,
+        ];
     }
 
     /** 将 Location 板块数据格式化为可读文本（供中心系统展示） */
@@ -467,11 +581,8 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        // Location / User Journey：只读 WPForms 条目板块（entry meta），不读 Hidden Smart Tag
-        $location_raw = self::collect_location($entry_id);
-        $entry_geolocation = self::format_location_text($location_raw);
-        $journey_raw = self::collect_user_journey($entry_id);
-        $entry_user_journey = self::format_user_journey_html($journey_raw);
+        // Location / User Journey：板块 meta + Smart Tag；不读 Hidden
+        $lj = self::build_location_journey($entry_id, $form_data, $fields);
 
         $payload = [
             'site_key' => $settings['site_key'],
@@ -484,31 +595,134 @@ final class Inquiry_Bridge_Plugin
             'message' => $message,
             'page_url' => $page_url,
             'fields' => $fields,
-            'entry_geolocation' => $entry_geolocation,
-            'location' => $location_raw,
-            'entry_user_journey' => $entry_user_journey,
-            'user_journey' => $journey_raw,
+            'entry_geolocation' => $lj['entry_geolocation'],
+            'location' => $lj['location_raw'],
+            'entry_user_journey' => $lj['entry_user_journey'],
+            'user_journey' => $lj['journey_raw'],
         ];
 
-        $response = wp_remote_post($settings['api_url'], [
+        $ok = self::post_to_api($settings['api_url'], $payload);
+        $GLOBALS['inquiry_bridge_suppress_email'] = $ok;
+        $GLOBALS['inquiry_bridge_pushed_entry'] = absint($entry_id);
+
+        if (!$ok) {
+            error_log('[Inquiry Bridge] ingest failed, fallback to WPForms email');
+        }
+
+        // 板块数据常晚于推送写入：缓存 payload 并延迟补推
+        set_transient('inquiry_bridge_payload_' . absint($entry_id), $payload, 15 * MINUTE_IN_SECONDS);
+        if ($lj['entry_geolocation'] === '' || $lj['entry_user_journey'] === '') {
+            self::schedule_retry(absint($entry_id));
+            error_log('[Inquiry Bridge] location/journey empty on first push for entry ' . absint($entry_id) . '; scheduled retry');
+        }
+    }
+
+    /** process_complete 再试一次同请求内补全（若尚未推送则补推） */
+    public static function on_process_complete($fields, $entry, $form_data, $entry_id)
+    {
+        $entry_id = absint($entry_id);
+        if (!$entry_id) {
+            return;
+        }
+        // 已在 entry_saved 推送过则只安排/执行 enrich
+        $payload = get_transient('inquiry_bridge_payload_' . $entry_id);
+        if (!is_array($payload)) {
+            return;
+        }
+        $lj = self::build_location_journey($entry_id, $form_data, is_array($fields) ? $fields : []);
+        if ($lj['entry_geolocation'] === '' && $lj['entry_user_journey'] === '') {
+            self::schedule_retry($entry_id);
+            return;
+        }
+        $payload['entry_geolocation'] = $lj['entry_geolocation'];
+        $payload['location'] = $lj['location_raw'];
+        $payload['entry_user_journey'] = $lj['entry_user_journey'];
+        $payload['user_journey'] = $lj['journey_raw'];
+        set_transient('inquiry_bridge_payload_' . $entry_id, $payload, 15 * MINUTE_IN_SECONDS);
+
+        $settings = self::settings();
+        if (empty($settings['api_url'])) {
+            return;
+        }
+        self::post_to_api($settings['api_url'], $payload);
+    }
+
+    public static function retry_meta_push($entry_id)
+    {
+        $entry_id = absint($entry_id);
+        $payload = get_transient('inquiry_bridge_payload_' . $entry_id);
+        if (!is_array($payload)) {
+            return;
+        }
+        $settings = self::settings();
+        if (empty($settings['api_url'])) {
+            return;
+        }
+
+        $form_data = [];
+        $fields = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+        if (function_exists('wpforms') && !empty($payload['form_id'])) {
+            $form_id = absint($payload['form_id']);
+            $form = null;
+            $wpforms = wpforms();
+            if (is_object($wpforms) && method_exists($wpforms, 'form') && isset($wpforms->form) && method_exists($wpforms->form, 'get')) {
+                $form = $wpforms->form->get($form_id);
+            } elseif (is_object($wpforms) && method_exists($wpforms, 'get')) {
+                $form_handler = $wpforms->get('form');
+                if ($form_handler && method_exists($form_handler, 'get')) {
+                    $form = $form_handler->get($form_id);
+                }
+            }
+            if ($form && !empty($form->post_content)) {
+                if (function_exists('wpforms_decode')) {
+                    $decoded = wpforms_decode($form->post_content);
+                    $form_data = is_array($decoded) ? $decoded : [];
+                } else {
+                    $decoded = json_decode($form->post_content, true);
+                    $form_data = is_array($decoded) ? $decoded : [];
+                }
+            }
+        }
+
+        $lj = self::build_location_journey($entry_id, $form_data, $fields);
+        $payload['entry_geolocation'] = $lj['entry_geolocation'];
+        $payload['location'] = $lj['location_raw'];
+        $payload['entry_user_journey'] = $lj['entry_user_journey'];
+        $payload['user_journey'] = $lj['journey_raw'];
+
+        $ok = self::post_to_api($settings['api_url'], $payload);
+        if ($ok && ($lj['entry_geolocation'] !== '' || $lj['entry_user_journey'] !== '')) {
+            delete_transient('inquiry_bridge_payload_' . $entry_id);
+            error_log('[Inquiry Bridge] retry enriched entry ' . $entry_id);
+        } elseif ($lj['entry_geolocation'] === '' && $lj['entry_user_journey'] === '') {
+            error_log('[Inquiry Bridge] retry still empty for entry ' . $entry_id);
+            // 再试一次（最多通过 transient 存活窗口）
+            self::schedule_retry($entry_id, 60);
+        }
+    }
+
+    private static function schedule_retry($entry_id, $delay = 20)
+    {
+        $entry_id = absint($entry_id);
+        $args = [$entry_id];
+        if (!wp_next_scheduled(self::RETRY_HOOK, $args)) {
+            wp_schedule_single_event(time() + max(5, (int) $delay), self::RETRY_HOOK, $args);
+        }
+    }
+
+    private static function post_to_api($api_url, array $payload)
+    {
+        $response = wp_remote_post($api_url, [
             'timeout' => 15,
             'headers' => ['Content-Type' => 'application/json'],
             'body' => wp_json_encode($payload),
         ]);
-
-        $ok = false;
-        if (!is_wp_error($response)) {
-            $code = (int) wp_remote_retrieve_response_code($response);
-            $body = json_decode(wp_remote_retrieve_body($response), true);
-            $ok = ($code >= 200 && $code < 300 && !empty($body['ok']));
+        if (is_wp_error($response)) {
+            return false;
         }
-
-        $GLOBALS['inquiry_bridge_suppress_email'] = $ok;
-        if (!$ok) {
-            error_log('[Inquiry Bridge] ingest failed, fallback to WPForms email');
-        } elseif ($entry_geolocation === '' && $entry_user_journey === '') {
-            error_log('[Inquiry Bridge] location/user_journey empty for entry ' . absint($entry_id) . ' (check Geolocation / User Journey addons)');
-        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        return ($code >= 200 && $code < 300 && !empty($body['ok']));
     }
 
     public static function maybe_disable_emails($disable)

@@ -112,6 +112,54 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   });
 }
 
+async function enrichInquiryPanelData(
+  inquiryId: string,
+  rawPayload: string | null,
+  body: IngestBody,
+) {
+  const geo = String(body.entry_geolocation ?? "").trim();
+  const journey = String(body.entry_user_journey ?? "").trim();
+  const hasLocation = body.location != null && body.location !== "";
+  const hasJourneyRaw = body.user_journey != null && body.user_journey !== "";
+  if (!geo && !journey && !hasLocation && !hasJourneyRaw) {
+    return null;
+  }
+
+  let payload: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(rawPayload || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      payload = parsed as Record<string, unknown>;
+    }
+  } catch {
+    payload = {};
+  }
+
+  let changed = false;
+  if (geo) {
+    payload.entry_geolocation = geo;
+    changed = true;
+  }
+  if (journey) {
+    payload.entry_user_journey = journey;
+    changed = true;
+  }
+  if (hasLocation) {
+    payload.location = body.location;
+    changed = true;
+  }
+  if (hasJourneyRaw) {
+    payload.user_journey = body.user_journey;
+    changed = true;
+  }
+  if (!changed) return null;
+
+  return prisma.inquiry.update({
+    where: { id: inquiryId },
+    data: { rawPayload: JSON.stringify(payload) },
+  });
+}
+
 export async function ingestInquiry(body: IngestBody) {
   const siteKey = body.site_key?.trim();
   if (!siteKey) throw new Error("site_key required");
@@ -129,7 +177,8 @@ export async function ingestInquiry(body: IngestBody) {
     },
   });
   if (existing) {
-    return { inquiry: existing, duplicated: true };
+    const enriched = await enrichInquiryPanelData(existing.id, existing.rawPayload, body);
+    return { inquiry: enriched ?? existing, duplicated: true };
   }
 
   const name = String(body.name ?? "");
