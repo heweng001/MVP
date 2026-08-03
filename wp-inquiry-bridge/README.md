@@ -17,6 +17,7 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
+- **v1.0.9**：User Journey 修复——读独立表/`user_uuid`、Cookie/POST；若 `entry_saved` 时仍空，在 `process_complete` 再补推一次（中心 enrich，不重发邮件）
 - **v1.0.8**：推送前等待约 **5 秒**，再从 WPForms **Location / User Journey** 板块抓取并**一次推送**（无 Cron 延迟补推）；不依赖 Hidden Smart Tag
 - 需站点已安装并启用：
   - WPForms **Geolocation** Addon（Location 板块）

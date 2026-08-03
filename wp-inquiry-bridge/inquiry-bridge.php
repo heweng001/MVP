@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.8
+ * Version: 1.0.9
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,8 +14,15 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
-    /** 推送前等待秒数，给 Geolocation / User Journey 写入 entry meta */
+    /** 推送前等待秒数，给 Geolocation meta / User Journey 表写完 */
     const META_WAIT_SECONDS = 5;
+
+    /** @var array|null 本次请求 wait 前缓存的 journey（Cookie/POST） */
+    private static $journey_request_cache = null;
+    /** @var bool 首次推送时 journey 是否为空（需在 process_complete 补推） */
+    private static $need_journey_enrich = false;
+    /** @var array|null 首次推送时的基础字段，供补推复用 */
+    private static $last_push_context = null;
 
     public static function init()
     {
@@ -27,6 +34,8 @@ final class Inquiry_Bridge_Plugin
 
         // 晚于各 Addon 写入 meta；推送前再等待 META_WAIT_SECONDS
         add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 999, 4);
+        // User Journey 常在 process_complete 才落库；若首次缺 journey 则补推一次（中心会 enrich，不重发邮件）
+        add_action('wpforms_process_complete', [__CLASS__, 'on_process_complete'], 999, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -315,7 +324,12 @@ final class Inquiry_Bridge_Plugin
             $out['geo'] = trim($geo);
         }
         if (strpos($journey, '{entry_user_journey}') === false) {
-            $out['journey'] = trim($journey);
+            $j = trim($journey);
+            // 空表格 / 仅空白不算成功
+            $text = trim(wp_strip_all_tags($j));
+            if ($j !== '' && $text !== '' && $text !== '—' && strtolower($text) !== 'n/a') {
+                $out['journey'] = $j;
+            }
         }
         return $out;
     }
@@ -333,31 +347,362 @@ final class Inquiry_Bridge_Plugin
     }
 
     /**
-     * 从 WPForms User Journey 板块（entry meta）读取路径数据
+     * User Journey：独立表 / entry_meta / Cookie / POST / Addon API
+     * （Location 在 entry_meta；Journey 通常在 wpforms_user_journey 表）
      */
-    private static function collect_user_journey($entry_id)
+    private static function collect_user_journey($entry_id, $entry = null)
     {
-        return self::get_entry_meta_data($entry_id, [
+        $entry_id = absint($entry_id);
+
+        $from_table = self::collect_user_journey_from_table($entry_id);
+        if ($from_table !== null) {
+            return $from_table;
+        }
+
+        $from_meta = self::get_entry_meta_data($entry_id, [
             'user_journey',
             'user-journey',
             'journey',
             'entry_user_journey',
+            'user_journeys',
         ]);
+        if ($from_meta !== null) {
+            return $from_meta;
+        }
+
+        $from_scan = self::scan_entry_meta_for_journey($entry_id);
+        if ($from_scan !== null) {
+            return $from_scan;
+        }
+
+        $from_api = self::collect_user_journey_via_addon_api($entry_id);
+        if ($from_api !== null) {
+            return $from_api;
+        }
+
+        $from_request = self::collect_user_journey_from_request($entry);
+        if ($from_request !== null) {
+            return $from_request;
+        }
+
+        return null;
     }
 
-    /** 组装 location + journey 文本（优先 Smart Tag，再板块 meta） */
-    private static function build_location_journey($entry_id, $form_data, $fields)
+    /** 直查可能的 user journey 数据表 */
+    private static function collect_user_journey_from_table($entry_id)
+    {
+        global $wpdb;
+        $entry_id = absint($entry_id);
+        if (!$entry_id) {
+            return null;
+        }
+
+        $candidates = [
+            $wpdb->prefix . 'wpforms_user_journey',
+            $wpdb->prefix . 'wpforms_user_journeys',
+            $wpdb->prefix . 'wpforms_entry_user_journey',
+        ];
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $like = $wpdb->esc_like($wpdb->prefix . 'wpforms') . '%journey%';
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $found = $wpdb->get_col($wpdb->prepare('SHOW TABLES LIKE %s', $like));
+        if (is_array($found)) {
+            foreach ($found as $t) {
+                if ($t && !in_array($t, $candidates, true)) {
+                    $candidates[] = $t;
+                }
+            }
+        }
+
+        // 部分版本用 user_uuid 关联，顺带取 entry 的 uuid
+        $user_uuid = '';
+        $entries_table = $wpdb->prefix . 'wpforms_entries';
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $entries_table))) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+            $user_uuid = (string) $wpdb->get_var(
+                $wpdb->prepare("SELECT user_uuid FROM `{$entries_table}` WHERE id = %d", $entry_id)
+            );
+        }
+
+        foreach ($candidates as $table) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+            if (!$exists) {
+                continue;
+            }
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $cols = $wpdb->get_col("DESCRIBE `{$table}`", 0);
+            if (!is_array($cols)) {
+                continue;
+            }
+
+            $order = in_array('timestamp', $cols, true)
+                ? 'timestamp ASC'
+                : (in_array('date', $cols, true) ? 'date ASC' : (in_array('id', $cols, true) ? 'id ASC' : ''));
+            $order_sql = $order !== '' ? " ORDER BY {$order}" : '';
+
+            $rows = null;
+            if (in_array('entry_id', $cols, true)) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $rows = $wpdb->get_results(
+                    $wpdb->prepare("SELECT * FROM `{$table}` WHERE entry_id = %d{$order_sql}", $entry_id),
+                    ARRAY_A
+                );
+            }
+            if (empty($rows) && $user_uuid !== '' && in_array('user_uuid', $cols, true)) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $rows = $wpdb->get_results(
+                    $wpdb->prepare("SELECT * FROM `{$table}` WHERE user_uuid = %s{$order_sql}", $user_uuid),
+                    ARRAY_A
+                );
+            }
+            if (empty($rows) && in_array('form_id', $cols, true) && in_array('entry_id', $cols, true)) {
+                // already tried entry_id
+            }
+            if (!empty($rows)) {
+                return $rows;
+            }
+        }
+        return null;
+    }
+
+    /** 扫描该 entry 全部 meta，找出像 journey 的结构 */
+    private static function scan_entry_meta_for_journey($entry_id)
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'wpforms_entry_meta';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if (!$exists) {
+            return null;
+        }
+        $rows = $wpdb->get_results(
+            $wpdb->prepare("SELECT type, data FROM `{$table}` WHERE entry_id = %d", $entry_id),
+            ARRAY_A
+        );
+        if (empty($rows)) {
+            return null;
+        }
+        foreach ($rows as $row) {
+            $type = strtolower((string) ($row['type'] ?? ''));
+            if (strpos($type, 'location') !== false || strpos($type, 'geo') !== false) {
+                continue;
+            }
+            $decoded = self::decode_meta_data($row['data'] ?? null);
+            if (self::looks_like_journey($decoded)) {
+                return $decoded;
+            }
+            if (strpos($type, 'journey') !== false && $decoded !== null && $decoded !== '' && $decoded !== []) {
+                return $decoded;
+            }
+        }
+        return null;
+    }
+
+    /** @param mixed $data */
+    private static function looks_like_journey($data)
+    {
+        if (!is_array($data) || $data === []) {
+            return false;
+        }
+        $steps = $data;
+        if (isset($data['steps']) && is_array($data['steps'])) {
+            $steps = $data['steps'];
+        } elseif (isset($data['pages']) && is_array($data['pages'])) {
+            $steps = $data['pages'];
+        }
+        if (!is_array($steps) || $steps === []) {
+            return false;
+        }
+        $first = reset($steps);
+        if (is_object($first)) {
+            $first = (array) $first;
+        }
+        if (!is_array($first)) {
+            return false;
+        }
+        return isset($first['url']) || isset($first['title']) || isset($first['pageUrl']) || isset($first['page_url']) || isset($first['path']);
+    }
+
+    /** 尝试调用 User Journey Addon 公开 API */
+    private static function collect_user_journey_via_addon_api($entry_id)
+    {
+        $entry_id = absint($entry_id);
+        // 常见类名 / 容器
+        $callables = [];
+        if (class_exists('\WPFormsUserJourney\DB\Repository') && method_exists('\WPFormsUserJourney\DB\Repository', 'get_by_entry_id')) {
+            $callables[] = ['\WPFormsUserJourney\DB\Repository', 'get_by_entry_id'];
+        }
+        if (function_exists('wpforms_user_journey')) {
+            $uj = wpforms_user_journey();
+            if (is_object($uj) && method_exists($uj, 'get_entry_user_journey')) {
+                $res = $uj->get_entry_user_journey($entry_id);
+                if (!empty($res)) {
+                    return $res;
+                }
+            }
+            if (is_object($uj) && method_exists($uj, 'get')) {
+                $repo = $uj->get('repository');
+                if (is_object($repo) && method_exists($repo, 'get_by_entry_id')) {
+                    $res = $repo->get_by_entry_id($entry_id);
+                    if (!empty($res)) {
+                        return $res;
+                    }
+                }
+            }
+        }
+        foreach ($callables as $cb) {
+            if (is_callable($cb)) {
+                $res = call_user_func($cb, $entry_id);
+                if (!empty($res)) {
+                    return $res;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 从表单提交请求 / Cookie 读取（Addon 写库前或写库失败时的兜底） */
+    private static function collect_user_journey_from_request($entry = null)
+    {
+        $candidates = [];
+        if (is_array($entry)) {
+            $deep = self::deep_find_journey($entry);
+            if ($deep !== null) {
+                return $deep;
+            }
+            foreach (['user_journey', 'entry_user_journey', 'wpforms_user_journey'] as $k) {
+                if (!empty($entry[$k])) {
+                    $candidates[] = $entry[$k];
+                }
+            }
+        }
+        if (!empty($_POST['wpforms']) && is_array($_POST['wpforms'])) {
+            $wpf = wp_unslash($_POST['wpforms']);
+            $deep = self::deep_find_journey($wpf);
+            if ($deep !== null) {
+                return $deep;
+            }
+            foreach (['user_journey', 'entry_user_journey', 'journey'] as $k) {
+                if (!empty($wpf[$k])) {
+                    $candidates[] = $wpf[$k];
+                }
+            }
+        }
+        // 有的版本用独立 POST 键 / JSON body
+        foreach ($_POST as $key => $val) {
+            $kl = strtolower((string) $key);
+            if (strpos($kl, 'journey') === false && strpos($kl, 'wpforms_uj') === false) {
+                continue;
+            }
+            $candidates[] = wp_unslash($val);
+        }
+        if (!empty($_COOKIE) && is_array($_COOKIE)) {
+            foreach ($_COOKIE as $name => $val) {
+                $n = strtolower((string) $name);
+                if (strpos($n, 'user_journey') !== false || strpos($n, 'wpforms_uj') !== false || strpos($n, 'wpfuj') !== false) {
+                    $candidates[] = wp_unslash($val);
+                }
+            }
+        }
+
+        foreach ($candidates as $raw) {
+            if (is_array($raw) || is_object($raw)) {
+                $arr = is_object($raw) ? (array) $raw : $raw;
+                if (self::looks_like_journey($arr) || (is_array($arr) && $arr !== [])) {
+                    return $arr;
+                }
+                continue;
+            }
+            if (!is_string($raw) || trim($raw) === '') {
+                continue;
+            }
+            $decoded = self::decode_meta_data($raw);
+            if ($decoded !== null && self::looks_like_journey($decoded)) {
+                return $decoded;
+            }
+            $decoded2 = self::decode_meta_data(urldecode($raw));
+            if ($decoded2 !== null && self::looks_like_journey($decoded2)) {
+                return $decoded2;
+            }
+        }
+        return null;
+    }
+
+    /** 递归在 POST/entry 中找 journey 结构 */
+    private static function deep_find_journey($data, $depth = 0)
+    {
+        if ($depth > 8 || $data === null) {
+            return null;
+        }
+        if (is_object($data)) {
+            $data = (array) $data;
+        }
+        if (!is_array($data)) {
+            if (is_string($data) && $data !== '') {
+                $decoded = self::decode_meta_data($data);
+                if (self::looks_like_journey($decoded)) {
+                    return $decoded;
+                }
+            }
+            return null;
+        }
+        if (self::looks_like_journey($data)) {
+            return $data;
+        }
+        foreach ($data as $k => $v) {
+            $kl = strtolower((string) $k);
+            if (strpos($kl, 'journey') !== false) {
+                if (is_string($v)) {
+                    $decoded = self::decode_meta_data($v);
+                    if (self::looks_like_journey($decoded)) {
+                        return $decoded;
+                    }
+                    $decoded2 = self::decode_meta_data(urldecode($v));
+                    if (self::looks_like_journey($decoded2)) {
+                        return $decoded2;
+                    }
+                } elseif (is_array($v) || is_object($v)) {
+                    $arr = is_object($v) ? (array) $v : $v;
+                    if (self::looks_like_journey($arr) || $arr !== []) {
+                        return $arr;
+                    }
+                }
+            }
+            $found = self::deep_find_journey($v, $depth + 1);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 组装 location + journey（Smart Tag → 表/meta → wait 前缓存的 Cookie/POST）
+     * @param mixed $journey_from_request wait 前抓到的请求侧数据
+     */
+    private static function build_location_journey($entry_id, $form_data, $fields, $entry = null, $journey_from_request = null)
     {
         $tags = self::collect_via_smart_tags($form_data, $fields, $entry_id);
         $location_raw = self::collect_location($entry_id);
-        $journey_raw = self::collect_user_journey($entry_id);
+        $journey_raw = self::collect_user_journey($entry_id, $entry);
+        if ($journey_raw === null && $journey_from_request !== null) {
+            $journey_raw = $journey_from_request;
+        }
 
         $entry_geolocation = $tags['geo'] !== ''
             ? $tags['geo']
             : self::format_location_text($location_raw);
-        $entry_user_journey = $tags['journey'] !== ''
-            ? $tags['journey']
-            : self::format_user_journey_html($journey_raw);
+
+        if ($tags['journey'] !== '') {
+            $entry_user_journey = $tags['journey'];
+        } else {
+            $entry_user_journey = self::format_user_journey_html($journey_raw);
+        }
+
+        if ($entry_user_journey === '') {
+            error_log('[Inquiry Bridge] user_journey still empty for entry ' . absint($entry_id));
+        }
 
         return [
             'location_raw' => $location_raw,
@@ -580,15 +925,24 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        // 等待板块 meta 落库后再抓取并推送（方案 A：一次推送，无 Cron 补推）
+        // User Journey 常在 Cookie/POST；Addon 写库后可能清 Cookie，须在 wait 前先抓一份
+        self::$journey_request_cache = self::collect_user_journey_from_request($entry);
+
+        // 等待板块 meta / journey 表落库后再抓取并推送（方案 A：一次主推送）
         $wait = (int) self::META_WAIT_SECONDS;
         if ($wait > 0) {
             // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_sleep
             sleep($wait);
         }
 
-        // Location / User Journey：板块 meta + Smart Tag；不读 Hidden
-        $lj = self::build_location_journey($entry_id, $form_data, $fields);
+        // Location / User Journey：表 + meta + Smart Tag + 请求缓存；不读 Hidden
+        $lj = self::build_location_journey(
+            $entry_id,
+            $form_data,
+            $fields,
+            $entry,
+            self::$journey_request_cache
+        );
 
         $payload = [
             'site_key' => $settings['site_key'],
@@ -610,10 +964,80 @@ final class Inquiry_Bridge_Plugin
         $ok = self::post_to_api($settings['api_url'], $payload);
         $GLOBALS['inquiry_bridge_suppress_email'] = $ok;
 
+        self::$need_journey_enrich = ($ok && $lj['entry_user_journey'] === '');
+        self::$last_push_context = [
+            'settings' => $settings,
+            'form_id' => $form_id,
+            'entry_id' => $entry_id,
+            'name' => $name,
+            'email' => $email,
+            'phone' => $phone,
+            'message' => $message,
+            'page_url' => $page_url,
+            'fields' => $fields,
+            'form_data' => $form_data,
+            'entry' => $entry,
+            'entry_geolocation' => $lj['entry_geolocation'],
+            'location' => $lj['location_raw'],
+        ];
+
         if (!$ok) {
             error_log('[Inquiry Bridge] ingest failed, fallback to WPForms email');
         } elseif ($lj['entry_geolocation'] === '' && $lj['entry_user_journey'] === '') {
             error_log('[Inquiry Bridge] location/journey still empty after wait for entry ' . absint($entry_id));
+        }
+    }
+
+    /**
+     * process_complete：User Journey 表此时通常已写入；首次缺 journey 则补推 enrich
+     */
+    public static function on_process_complete($fields, $entry, $form_data, $entry_id)
+    {
+        if (!self::$need_journey_enrich || empty(self::$last_push_context)) {
+            return;
+        }
+        $ctx = self::$last_push_context;
+        if ((string) $ctx['entry_id'] !== (string) $entry_id) {
+            return;
+        }
+
+        $lj = self::build_location_journey(
+            $entry_id,
+            is_array($form_data) ? $form_data : $ctx['form_data'],
+            is_array($fields) ? $fields : $ctx['fields'],
+            $entry,
+            self::$journey_request_cache
+        );
+
+        if ($lj['entry_user_journey'] === '') {
+            error_log('[Inquiry Bridge] journey still empty at process_complete for entry ' . absint($entry_id));
+            self::$need_journey_enrich = false;
+            return;
+        }
+
+        $payload = [
+            'site_key' => $ctx['settings']['site_key'],
+            'form_id' => (string) $ctx['form_id'],
+            'entry_id' => (string) $ctx['entry_id'],
+            'name' => $ctx['name'],
+            'email' => $ctx['email'],
+            'phone' => $ctx['phone'],
+            'subject' => '',
+            'message' => $ctx['message'],
+            'page_url' => $ctx['page_url'],
+            'fields' => $ctx['fields'],
+            'entry_geolocation' => $lj['entry_geolocation'] !== '' ? $lj['entry_geolocation'] : $ctx['entry_geolocation'],
+            'location' => $lj['location_raw'] !== null ? $lj['location_raw'] : $ctx['location'],
+            'entry_user_journey' => $lj['entry_user_journey'],
+            'user_journey' => $lj['journey_raw'],
+        ];
+
+        $ok = self::post_to_api($ctx['settings']['api_url'], $payload);
+        self::$need_journey_enrich = false;
+        if ($ok) {
+            error_log('[Inquiry Bridge] journey enrich push ok for entry ' . absint($entry_id));
+        } else {
+            error_log('[Inquiry Bridge] journey enrich push failed for entry ' . absint($entry_id));
         }
     }
 
