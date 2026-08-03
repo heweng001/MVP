@@ -168,6 +168,15 @@ export function MarkConfirm({
                     className="text-[13px] leading-relaxed overflow-x-auto [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-1.5 [&_td]:py-1"
                     dangerouslySetInnerHTML={{ __html: sanitizeJourneyHtml(f.value) }}
                   />
+                ) : isHttpUrl(f.value) ? (
+                  <a
+                    href={f.value.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[13px] leading-relaxed text-[var(--brand)] break-all underline underline-offset-2 hover:opacity-80"
+                  >
+                    {f.value.trim()}
+                  </a>
                 ) : (
                   <div className="whitespace-pre-wrap text-[13px] leading-relaxed">{f.value}</div>
                 )}
@@ -262,4 +271,15 @@ function sanitizeJourneyHtml(html: string) {
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "");
+}
+
+function isHttpUrl(value: string) {
+  const v = value.trim();
+  if (!/^https?:\/\/\S+$/i.test(v)) return false;
+  try {
+    const u = new URL(v);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

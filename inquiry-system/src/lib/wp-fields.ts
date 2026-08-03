@@ -156,12 +156,12 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
 
   const out: WpFormFieldRow[] = [];
   if (pageUrl) {
-    out.push({ id: "smart-page_url", label: "page_url（页面链接）", value: pageUrl, type: "hidden" });
+    out.push({ id: "smart-page_url", label: "买家发询盘页面", value: pageUrl, type: "hidden" });
   }
   if (geoFromMeta) {
     out.push({
       id: "smart-entry_geolocation",
-      label: "entry_geolocation（地理位置）",
+      label: "买家的地理位置",
       value: formatGeolocationZh(geoFromMeta),
       type: "hidden",
     });
@@ -169,7 +169,7 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
   if (journeyFromMeta) {
     out.push({
       id: "smart-entry_user_journey",
-      label: "entry_user_journey（用户路径）",
+      label: "买家浏览路径",
       value: journeyFromMeta,
       type: "hidden",
       html: /<[a-z][\s\S]*>/i.test(journeyFromMeta),

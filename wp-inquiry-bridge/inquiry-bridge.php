@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,15 +14,6 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
-    /** 推送前等待秒数，给 Geolocation meta / User Journey 表写完 */
-    const META_WAIT_SECONDS = 5;
-
-    /** @var array|null 本次请求 wait 前缓存的 journey（Cookie/POST） */
-    private static $journey_request_cache = null;
-    /** @var bool 首次推送时 journey 是否为空（需在 process_complete 补推） */
-    private static $need_journey_enrich = false;
-    /** @var array|null 首次推送时的基础字段，供补推复用 */
-    private static $last_push_context = null;
 
     public static function init()
     {
@@ -32,10 +23,8 @@ final class Inquiry_Bridge_Plugin
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
 
-        // 晚于各 Addon 写入 meta；推送前再等待 META_WAIT_SECONDS
+        // 晚于各 Addon 写入 Location / User Journey
         add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 999, 4);
-        // User Journey 常在 process_complete 才落库；若首次缺 journey 则补推一次（中心会 enrich，不重发邮件）
-        add_action('wpforms_process_complete', [__CLASS__, 'on_process_complete'], 999, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -90,7 +79,7 @@ final class Inquiry_Bridge_Plugin
                     <li><strong>Site Key</strong>：该站专用密钥（每站不同，勿共用）</li>
                 </ul>
                 <p>请<strong>保留</strong> WPForms 表单「通知」作为降级备用：推送成功时本插件会阻止本次原生发信；推送失败时仍由 WPForms 发信，避免丢单。</p>
-                <p>地理位置与用户路径从 WPForms <strong>Location / User Journey</strong> 板块读取（不依赖 Hidden）。推送前等待约 <?php echo (int) self::META_WAIT_SECONDS; ?> 秒以便板块数据写完；需安装 Geolocation、User Journey 插件。</p>
+                <p>地理位置与用户路径从 WPForms <strong>Location / User Journey</strong> 板块读取（不依赖 Hidden）。需安装 Geolocation、User Journey 插件。</p>
             </div>
             <form method="post" action="options.php">
                 <?php settings_fields('inquiry_bridge'); ?>
@@ -678,8 +667,8 @@ final class Inquiry_Bridge_Plugin
     }
 
     /**
-     * 组装 location + journey（Smart Tag → 表/meta → wait 前缓存的 Cookie/POST）
-     * @param mixed $journey_from_request wait 前抓到的请求侧数据
+     * 组装 location + journey（Smart Tag → 表/meta → Cookie/POST）
+     * @param mixed $journey_from_request 请求侧 journey 兜底
      */
     private static function build_location_journey($entry_id, $form_data, $fields, $entry = null, $journey_from_request = null)
     {
@@ -925,23 +914,13 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        // User Journey 常在 Cookie/POST；Addon 写库后可能清 Cookie，须在 wait 前先抓一份
-        self::$journey_request_cache = self::collect_user_journey_from_request($entry);
-
-        // 等待板块 meta / journey 表落库后再抓取并推送（方案 A：一次主推送）
-        $wait = (int) self::META_WAIT_SECONDS;
-        if ($wait > 0) {
-            // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_sleep
-            sleep($wait);
-        }
-
-        // Location / User Journey：表 + meta + Smart Tag + 请求缓存；不读 Hidden
+        // Location / User Journey：表 + meta + Smart Tag + Cookie/POST；不读 Hidden
         $lj = self::build_location_journey(
             $entry_id,
             $form_data,
             $fields,
             $entry,
-            self::$journey_request_cache
+            self::collect_user_journey_from_request($entry)
         );
 
         $payload = [
@@ -964,80 +943,10 @@ final class Inquiry_Bridge_Plugin
         $ok = self::post_to_api($settings['api_url'], $payload);
         $GLOBALS['inquiry_bridge_suppress_email'] = $ok;
 
-        self::$need_journey_enrich = ($ok && $lj['entry_user_journey'] === '');
-        self::$last_push_context = [
-            'settings' => $settings,
-            'form_id' => $form_id,
-            'entry_id' => $entry_id,
-            'name' => $name,
-            'email' => $email,
-            'phone' => $phone,
-            'message' => $message,
-            'page_url' => $page_url,
-            'fields' => $fields,
-            'form_data' => $form_data,
-            'entry' => $entry,
-            'entry_geolocation' => $lj['entry_geolocation'],
-            'location' => $lj['location_raw'],
-        ];
-
         if (!$ok) {
             error_log('[Inquiry Bridge] ingest failed, fallback to WPForms email');
         } elseif ($lj['entry_geolocation'] === '' && $lj['entry_user_journey'] === '') {
-            error_log('[Inquiry Bridge] location/journey still empty after wait for entry ' . absint($entry_id));
-        }
-    }
-
-    /**
-     * process_complete：User Journey 表此时通常已写入；首次缺 journey 则补推 enrich
-     */
-    public static function on_process_complete($fields, $entry, $form_data, $entry_id)
-    {
-        if (!self::$need_journey_enrich || empty(self::$last_push_context)) {
-            return;
-        }
-        $ctx = self::$last_push_context;
-        if ((string) $ctx['entry_id'] !== (string) $entry_id) {
-            return;
-        }
-
-        $lj = self::build_location_journey(
-            $entry_id,
-            is_array($form_data) ? $form_data : $ctx['form_data'],
-            is_array($fields) ? $fields : $ctx['fields'],
-            $entry,
-            self::$journey_request_cache
-        );
-
-        if ($lj['entry_user_journey'] === '') {
-            error_log('[Inquiry Bridge] journey still empty at process_complete for entry ' . absint($entry_id));
-            self::$need_journey_enrich = false;
-            return;
-        }
-
-        $payload = [
-            'site_key' => $ctx['settings']['site_key'],
-            'form_id' => (string) $ctx['form_id'],
-            'entry_id' => (string) $ctx['entry_id'],
-            'name' => $ctx['name'],
-            'email' => $ctx['email'],
-            'phone' => $ctx['phone'],
-            'subject' => '',
-            'message' => $ctx['message'],
-            'page_url' => $ctx['page_url'],
-            'fields' => $ctx['fields'],
-            'entry_geolocation' => $lj['entry_geolocation'] !== '' ? $lj['entry_geolocation'] : $ctx['entry_geolocation'],
-            'location' => $lj['location_raw'] !== null ? $lj['location_raw'] : $ctx['location'],
-            'entry_user_journey' => $lj['entry_user_journey'],
-            'user_journey' => $lj['journey_raw'],
-        ];
-
-        $ok = self::post_to_api($ctx['settings']['api_url'], $payload);
-        self::$need_journey_enrich = false;
-        if ($ok) {
-            error_log('[Inquiry Bridge] journey enrich push ok for entry ' . absint($entry_id));
-        } else {
-            error_log('[Inquiry Bridge] journey enrich push failed for entry ' . absint($entry_id));
+            error_log('[Inquiry Bridge] location/journey empty for entry ' . absint($entry_id));
         }
     }
 

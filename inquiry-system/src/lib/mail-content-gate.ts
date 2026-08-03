@@ -21,7 +21,7 @@ export const MAIL_TIPS = {
   displayJourney:
     "升级成SEO型网站，即可查看该买家发送询盘前浏览了网站的页面情况（含具体页面信息及对应页面的停留时间）。",
   seoUnlock:
-    "将本封询盘标记为「有效」后，即可查看到卖家地理位置信息及浏览路径等更多信息。",
+    "将本封询盘标记为「有效」后，即可查看到买家地理位置信息及浏览路径等更多信息。",
 } as const;
 
 export function mailContentGate(site: {
@@ -103,7 +103,7 @@ export function applyMailContentGate(opts: {
 
   if (!hasGeo) {
     next.push({
-      label: "entry_geolocation（地理位置）",
+      label: "买家的地理位置",
       value: geoTip,
       html: false,
       hint: true,
@@ -111,7 +111,7 @@ export function applyMailContentGate(opts: {
   }
   if (!hasJourney) {
     next.push({
-      label: "entry_user_journey（用户路径）",
+      label: "买家浏览路径",
       value: journeyTip,
       html: false,
       hint: true,
@@ -123,7 +123,7 @@ export function applyMailContentGate(opts: {
 
 function classifyMailHidden(label: string): "geo" | "journey" | "other" {
   const n = label.toLowerCase().replace(/[{}\s_\-()/（）]/g, "");
-  if (/entryuserjourney|userjourney|用户路径|用户旅程/.test(n)) return "journey";
-  if (/entrygeolocation|geolocation|地理位置/.test(n)) return "geo";
+  if (/entryuserjourney|userjourney|用户路径|用户旅程|买家浏览路径|浏览路径/.test(n)) return "journey";
+  if (/entrygeolocation|geolocation|地理位置|买家的地理位置/.test(n)) return "geo";
   return "other";
 }
