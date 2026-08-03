@@ -17,6 +17,7 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
-- 推送内容含完整 `fields`（含 Hidden：如 page_url、entry_geolocation）
-- **v1.0.4**：用户路径直接从 WPForms **User Journey** 板块（entry meta）读取并格式化为表格，**不依赖** Hidden 中的 `{entry_user_journey}`
-- 需站点已安装并启用 WPForms User Journey Addon
+- **v1.0.6**：地理位置、用户路径分别从 WPForms 条目的 **Location**、**User Journey** 板块（entry meta）读取，**不依赖** Hidden 中的 `{entry_geolocation}` / `{entry_user_journey}`
+- 需站点已安装并启用：
+  - WPForms **Geolocation** Addon（Location 板块）
+  - WPForms **User Journey** Addon

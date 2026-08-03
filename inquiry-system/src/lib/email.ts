@@ -63,7 +63,7 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
-  /** WPForms Hidden；可含 page_url / entry_geolocation / entry_user_journey */
+  /** 插件板块数据：entry_geolocation / entry_user_journey；Hidden 可含 page_url */
   hiddenFields?: { label: string; value: string; html?: boolean; hint?: boolean }[];
   /** 询盘正文被门控为提示文案（如网站到期） */
   messageHint?: boolean;

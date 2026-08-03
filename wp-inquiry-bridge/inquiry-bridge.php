@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -23,8 +23,8 @@ final class Inquiry_Bridge_Plugin
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
 
-        // 稍晚执行，便于 User Journey Addon 先写入 entry meta
-        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 25, 4);
+        // 稍晚执行，便于 Geolocation / User Journey Addon 先写入 entry meta
+        add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 30, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
     }
@@ -79,7 +79,7 @@ final class Inquiry_Bridge_Plugin
                     <li><strong>Site Key</strong>：该站专用密钥（每站不同，勿共用）</li>
                 </ul>
                 <p>请<strong>保留</strong> WPForms 表单「通知」作为降级备用：推送成功时本插件会阻止本次原生发信；推送失败时仍由 WPForms 发信，避免丢单。</p>
-                <p>用户路径从 WPForms <strong>User Journey</strong> 板块（entry meta）读取，无需在 Hidden 中写 <code>{entry_user_journey}</code>。</p>
+                <p>地理位置与用户路径分别从 WPForms 条目的 <strong>Location</strong>、<strong>User Journey</strong> 板块（entry meta）读取，<strong>不依赖</strong> Hidden 中的 <code>{entry_geolocation}</code> / <code>{entry_user_journey}</code>。需安装 Geolocation、User Journey 插件。</p>
             </div>
             <form method="post" action="options.php">
                 <?php settings_fields('inquiry_bridge'); ?>
@@ -194,9 +194,9 @@ final class Inquiry_Bridge_Plugin
     }
 
     /**
-     * 从 WPForms User Journey 板块（entry meta）读取路径数据
+     * 按 type 列表读取 entry meta（Location / User Journey 等板块）
      */
-    private static function collect_user_journey($entry_id)
+    private static function get_entry_meta_data($entry_id, array $types)
     {
         $handler = self::entry_meta_handler();
         if (!$handler || !method_exists($handler, 'get_meta')) {
@@ -207,7 +207,7 @@ final class Inquiry_Bridge_Plugin
             return null;
         }
 
-        foreach (['user_journey', 'user-journey', 'journey'] as $type) {
+        foreach ($types as $type) {
             $meta = $handler->get_meta(
                 [
                     'entry_id' => $entry_id,
@@ -228,6 +228,102 @@ final class Inquiry_Bridge_Plugin
             }
         }
         return null;
+    }
+
+    /** 从 WPForms Location / Geolocation 板块读取 */
+    private static function collect_location($entry_id)
+    {
+        return self::get_entry_meta_data($entry_id, [
+            'location',
+            'geolocation',
+            'geo_location',
+            'entry_geolocation',
+        ]);
+    }
+
+    /**
+     * 从 WPForms User Journey 板块（entry meta）读取路径数据
+     */
+    private static function collect_user_journey($entry_id)
+    {
+        return self::get_entry_meta_data($entry_id, [
+            'user_journey',
+            'user-journey',
+            'journey',
+            'entry_user_journey',
+        ]);
+    }
+
+    /** 将 Location 板块数据格式化为可读文本（供中心系统展示） */
+    private static function format_location_text($location)
+    {
+        if ($location === null || $location === '') {
+            return '';
+        }
+        if (is_string($location)) {
+            $trim = trim($location);
+            if ($trim === '' || strpos($trim, '{entry_geolocation}') !== false) {
+                return '';
+            }
+            $decoded = json_decode($trim, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $location = $decoded;
+            } else {
+                return $trim;
+            }
+        }
+        if (is_object($location)) {
+            $location = (array) $location;
+        }
+        if (!is_array($location)) {
+            return '';
+        }
+
+        $city = self::pick_step_str($location, ['city', 'city_name', 'town']);
+        $region = self::pick_step_str($location, ['region', 'region_name', 'state', 'province']);
+        $country = self::pick_step_str($location, ['country', 'country_name']);
+        $country_code = self::pick_step_str($location, ['country_code', 'countryCode', 'iso']);
+        $postal = self::pick_step_str($location, ['postal', 'zip', 'zipcode', 'postcode']);
+        $lat = self::pick_step_str($location, ['latitude', 'lat']);
+        $lng = self::pick_step_str($location, ['longitude', 'lng', 'lon']);
+        $ip = self::pick_step_str($location, ['ip', 'ip_address', 'user_ip']);
+
+        if ($country === '' && $country_code !== '') {
+            $country = $country_code;
+        }
+
+        $parts = [];
+        if ($city !== '') {
+            $parts[] = $city;
+        }
+        if ($region !== '') {
+            $parts[] = $region;
+        }
+        if ($country !== '') {
+            $parts[] = $country;
+        }
+        if ($postal !== '') {
+            $parts[] = $postal;
+        }
+
+        $line = implode(', ', $parts);
+        if ($lat !== '' && $lng !== '') {
+            $line = trim($line . ($line !== '' ? ' ' : '') . "({$lat}, {$lng})");
+        }
+        if ($line === '' && $ip !== '') {
+            $line = 'IP: ' . $ip;
+        }
+        if ($line === '' && $ip === '') {
+            // 兜底：扁平化关键字段
+            $flat = [];
+            foreach ($location as $k => $v) {
+                if (is_scalar($v) && (string) $v !== '') {
+                    $flat[] = $k . '=' . $v;
+                }
+            }
+            $line = implode('; ', $flat);
+        }
+        return $line;
     }
 
     private static function pick_step_str($row, $keys)
@@ -371,7 +467,9 @@ final class Inquiry_Bridge_Plugin
             $page_url = home_url('/');
         }
 
-        // 直接从 User Journey 板块（entry meta）抓取，不依赖 Hidden 中的 Smart Tag
+        // Location / User Journey：只读 WPForms 条目板块（entry meta），不读 Hidden Smart Tag
+        $location_raw = self::collect_location($entry_id);
+        $entry_geolocation = self::format_location_text($location_raw);
         $journey_raw = self::collect_user_journey($entry_id);
         $entry_user_journey = self::format_user_journey_html($journey_raw);
 
@@ -386,6 +484,8 @@ final class Inquiry_Bridge_Plugin
             'message' => $message,
             'page_url' => $page_url,
             'fields' => $fields,
+            'entry_geolocation' => $entry_geolocation,
+            'location' => $location_raw,
             'entry_user_journey' => $entry_user_journey,
             'user_journey' => $journey_raw,
         ];
@@ -406,6 +506,8 @@ final class Inquiry_Bridge_Plugin
         $GLOBALS['inquiry_bridge_suppress_email'] = $ok;
         if (!$ok) {
             error_log('[Inquiry Bridge] ingest failed, fallback to WPForms email');
+        } elseif ($entry_geolocation === '' && $entry_user_journey === '') {
+            error_log('[Inquiry Bridge] location/user_journey empty for entry ' . absint($entry_id) . ' (check Geolocation / User Journey addons)');
         }
     }
 

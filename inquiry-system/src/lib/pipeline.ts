@@ -21,6 +21,9 @@ export type IngestBody = {
   /** 插件从 WPForms User Journey 板块抓取并格式化后的 HTML */
   entry_user_journey?: string;
   user_journey?: unknown;
+  /** 插件从 WPForms Location / Geolocation 板块抓取 */
+  entry_geolocation?: string;
+  location?: unknown;
 };
 
 function token() {
@@ -188,6 +191,9 @@ export async function ingestInquiry(body: IngestBody) {
       rawPayload: JSON.stringify({
         fields: body.fields ?? {},
         entry_user_journey: body.entry_user_journey || "",
+        entry_geolocation: body.entry_geolocation || "",
+        location: body.location ?? null,
+        user_journey: body.user_journey ?? null,
       }),
       spamScore: spam.score,
       spamHits: JSON.stringify(spam.hits),

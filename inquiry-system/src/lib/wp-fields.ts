@@ -102,46 +102,52 @@ function classifyHidden(f: WpFormFieldRow): SmartKind {
 
 /**
  * 邮件/详情：
- * - page_url / entry_geolocation 来自 Hidden
- * - entry_user_journey 来自插件抓取的 WPForms User Journey 板块（rawPayload.entry_user_journey）
+ * - entry_geolocation / entry_user_journey 来自插件抓取的 WPForms Location、User Journey 板块
+ * - page_url 仍可来自 Hidden；不再从 Hidden 读取 geo / journey
  */
 export function extractHiddenFields(rawPayload: string | null | undefined): WpFormFieldRow[] {
   const root = parseRaw(rawPayload);
-  const journeyFromMeta =
+  const rootObj =
     root && typeof root === "object" && !Array.isArray(root)
-      ? String((root as Record<string, unknown>).entry_user_journey || "").trim()
-      : "";
+      ? (root as Record<string, unknown>)
+      : null;
+
+  const geoFromMeta = rootObj ? String(rootObj.entry_geolocation || "").trim() : "";
+  const journeyFromMeta = rootObj
+    ? String(rootObj.entry_user_journey || "").trim()
+    : "";
 
   const hiddens = parseWpFormFields(rawPayload).filter((f) => f.type === "hidden");
   let pageUrl = "";
-  let geoText = "";
   const others: WpFormFieldRow[] = [];
   const used = new Set<string>();
 
   for (const f of hiddens) {
     const kind = classifyHidden(f);
+    // geo / journey 一律忽略 Hidden，只认板块数据
+    if (kind === "entry_geolocation" || kind === "combined") {
+      used.add(f.id);
+      if (kind === "combined") {
+        const parsed = parseGeoSmartBlob(f.value);
+        if (parsed.pageUrl) pageUrl = pageUrl || parsed.pageUrl;
+      }
+      continue;
+    }
     if (kind === "page_url") {
       pageUrl = f.value;
-      used.add(f.id);
-    } else if (kind === "entry_geolocation") {
-      geoText = f.value;
-      used.add(f.id);
-    } else if (kind === "combined") {
-      const parsed = parseGeoSmartBlob(f.value);
-      if (parsed.pageUrl) pageUrl = pageUrl || parsed.pageUrl;
-      const withoutUrl = f.value
-        .replace(/\{entry_user_journey\}/gi, "")
-        .replace(parsed.pageUrl, "")
-        .trim();
-      geoText = geoText || withoutUrl;
       used.add(f.id);
     }
   }
 
   for (const f of hiddens) {
     if (used.has(f.id)) continue;
-    const cleaned = f.value.replace(/\{entry_user_journey\}/gi, "").trim();
+    const cleaned = f.value
+      .replace(/\{entry_user_journey\}/gi, "")
+      .replace(/\{entry_geolocation\}/gi, "")
+      .trim();
     if (!cleaned) continue;
+    // 跳过纯 journey/geo 智能标签残留
+    if (/entry_user_journey|entry_geolocation/i.test(f.label)) continue;
     others.push({
       ...f,
       value: localizeCountryCodes(cleaned),
@@ -152,11 +158,11 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
   if (pageUrl) {
     out.push({ id: "smart-page_url", label: "page_url（页面链接）", value: pageUrl, type: "hidden" });
   }
-  if (geoText) {
+  if (geoFromMeta) {
     out.push({
       id: "smart-entry_geolocation",
       label: "entry_geolocation（地理位置）",
-      value: formatGeolocationZh(geoText),
+      value: formatGeolocationZh(geoFromMeta),
       type: "hidden",
     });
   }
