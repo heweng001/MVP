@@ -95,7 +95,6 @@ export function SiteFormConfigPanel({
       body: JSON.stringify({
         siteId,
         formId: fd.get("formId"),
-        label: fd.get("label"),
         toEmails: fd.get("toEmails"),
         ccEmails: fd.get("ccEmails"),
       }),
@@ -214,8 +213,7 @@ export function SiteFormConfigPanel({
             ) : (
               forms.map((f) => (
                 <li key={f.id} className="border-b border-[var(--line)] py-1.5 text-xs">
-                  Form {f.formId}
-                  {f.label ? `（${f.label}）` : ""} → {f.toEmails}
+                  Form {f.formId} → {f.toEmails}
                   {f.ccEmails ? `；CC ${f.ccEmails}` : ""}
                 </li>
               ))
@@ -226,11 +224,6 @@ export function SiteFormConfigPanel({
               name="formId"
               required
               placeholder="WPForms form_id，如 34"
-              className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-            />
-            <input
-              name="label"
-              placeholder="备注，如：联系我们"
               className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
             />
             <input
