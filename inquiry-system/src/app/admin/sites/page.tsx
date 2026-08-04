@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SiteList } from "@/components/SiteList";
 import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
+import { parseMailHiddenFields } from "@/lib/mail-hidden-config";
 import {
   SITE_LIST_TABS,
   parseSiteListTab,
@@ -99,6 +100,7 @@ export default async function SitesPage({
     siteKey: s.siteKey,
     productKeywords: s.productKeywords,
     spamExtraWords: s.spamExtraWords,
+    mailHiddenFields: parseMailHiddenFields(s.mailHiddenFields),
     enabled: s.enabled,
     clientId: s.clientId,
     clientName: s.client.name,

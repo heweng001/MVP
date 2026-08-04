@@ -21,7 +21,6 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
   let applyError = "";
   const capsBefore = getMarkCapabilities(inquiry);
 
-  // 邮件链接一点即标记：打开页面时服务端直接落库，无需二次确认
   if (action && capsBefore.canInteract) {
     const already =
       (action === "valid" && inquiry.status === "valid") ||
@@ -41,9 +40,9 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
   }
 
   const caps = getMarkCapabilities(inquiry);
-  const unlockedFields = caps.showUnlockedDetails
-    ? unlockedDetailFields(inquiry.rawPayload)
-    : [];
+  const detail = caps.showUnlockedDetails
+    ? unlockedDetailFields(inquiry)
+    : { fields: [], messageTip: "" };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
@@ -66,7 +65,8 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
           invalidBlockedReason={caps.invalidBlockedReason}
           unlockAvailable={caps.unlockAvailable}
           showUnlockedDetails={caps.showUnlockedDetails}
-          unlockedFields={unlockedFields}
+          unlockedFields={detail.fields}
+          messageTip={detail.messageTip}
           initialMarkReason={inquiry.markReason || ""}
           justApplied={justApplied}
           applyError={applyError}

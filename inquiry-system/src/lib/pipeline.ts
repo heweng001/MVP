@@ -4,8 +4,7 @@ import { InquiryStatus } from "./constants";
 import { scoreSpam } from "./spam";
 import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
-import { applyMailContentGate, mailContentGate } from "./mail-content-gate";
-import { extractHiddenFields } from "./wp-fields";
+import { buildInquiryMailContent } from "./inquiry-mail-fields";
 
 export type IngestBody = {
   site_key: string;
@@ -53,7 +52,6 @@ async function resolveRecipients(siteId: string, formId: string) {
   });
   if (cfg && cfg.enabled) return parseEmails(cfg.toEmails, cfg.ccEmails);
 
-  // fallback: any enabled form config for site, or empty
   const any = await prisma.formMailConfig.findFirst({
     where: { siteId, enabled: true },
     orderBy: { createdAt: "asc" },
@@ -70,15 +68,14 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   if (!inquiry) throw new Error("Inquiry not found");
 
   const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
-  const gate = mailContentGate(inquiry.site);
-  const gated = applyMailContentGate({
+  const content = buildInquiryMailContent({
+    site: inquiry.site,
+    rawPayload: inquiry.rawPayload,
+    name: inquiry.name,
+    email: inquiry.email,
+    phone: inquiry.phone,
     message: inquiry.message,
-    hiddenFields: extractHiddenFields(inquiry.rawPayload).map((f) => ({
-      label: f.label,
-      value: f.value,
-      html: f.html,
-    })),
-    gate,
+    pageUrl: inquiry.pageUrl,
   });
   const sent = await sendInquiryEmail({
     to: recipients.to,
@@ -89,13 +86,15 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     name: inquiry.name,
     email: inquiry.email,
     phone: inquiry.phone,
-    message: gated.message,
-    messageHint: gated.messageHint,
-    unlockHint: gated.unlockHint,
+    message: content.message,
+    messageHint: content.messageHint,
+    unlockHint: content.unlockHint,
     pageUrl: inquiry.pageUrl,
     formId: inquiry.formId,
     entryId: inquiry.entryId,
-    hiddenFields: gated.hiddenFields,
+    extraFields: content.extraAbove,
+    belowFields: content.below,
+    fileAttachments: content.attachments,
   });
   if (sent.skipped) {
     throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");

@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { InquiryStatus, isSpamStatus, markHours } from "./constants";
 import { mailContentGate } from "./mail-content-gate";
-import { extractHiddenFields } from "./wp-fields";
+import { buildFeedbackDetailFields } from "./inquiry-mail-fields";
 
 export type MarkAction = "valid" | "invalid";
 
@@ -19,7 +19,7 @@ export type MarkCapabilities = {
   invalidBlockedReason: string;
   /** SEO 未到期：标记有效后可看详细信息 */
   unlockAvailable: boolean;
-  /** SEO 未到期且已标有效：展示 geo / journey / hidden */
+  /** SEO 未到期且已标有效：展示隐藏字段真值；或到期站展示明文（正文除外） */
   showUnlockedDetails: boolean;
 };
 
@@ -79,15 +79,15 @@ export function getMarkCapabilities(inquiry: {
   return {
     canInteract: true,
     reason: "",
-    // 未标记，或已标无效 → 可改为有效；已有效不可再改状态
     canMarkValid: unmarked || isInvalid,
-    // 仅未标记且未超 72 小时可标无效
     canMarkInvalid: unmarked && !invalidExpired,
     canEditReason: isInvalid,
     invalidBlockedReason:
       unmarked && invalidExpired ? INVALID_MARK_EXPIRED_TIP : "",
+    // 仅 SEO 未到期提供「标有效解锁」
     unlockAvailable: gate.seoUnlock,
-    showUnlockedDetails: isValid && gate.seoUnlock,
+    // SEO 有效后解锁；到期站始终可看字段区（正文另用提示）
+    showUnlockedDetails: gate.expired || (isValid && gate.seoUnlock),
   };
 }
 
@@ -130,7 +130,6 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
     return { ok: true as const, inquiry: updated };
   }
 
-  // invalid：已有效不可改；超 72 小时不可标无效
   if (inquiry.status === InquiryStatus.VALID) {
     return { ok: false as const, error: "已标记为有效的询盘不可再改为无效。" };
   }
@@ -182,10 +181,26 @@ export async function saveMarkReason(token: string, reason: string) {
   return { ok: true as const, inquiry: updated };
 }
 
-export function unlockedDetailFields(rawPayload: string | null | undefined) {
-  return extractHiddenFields(rawPayload).map((f) => ({
-    label: f.label,
-    value: f.value,
-    html: !!f.html,
-  }));
+export function unlockedDetailFields(
+  inquiry: {
+    rawPayload: string;
+    status: string;
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+    pageUrl: string;
+    site: { siteType: string; endDate: Date | string | null; mailHiddenFields?: string | null };
+  },
+) {
+  return buildFeedbackDetailFields({
+    site: inquiry.site,
+    rawPayload: inquiry.rawPayload,
+    status: inquiry.status,
+    name: inquiry.name,
+    email: inquiry.email,
+    phone: inquiry.phone,
+    message: inquiry.message,
+    pageUrl: inquiry.pageUrl,
+  });
 }

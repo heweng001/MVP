@@ -21,6 +21,7 @@ export function MarkConfirm({
   unlockAvailable = false,
   showUnlockedDetails,
   unlockedFields = [],
+  messageTip = "",
   initialMarkReason = "",
   justApplied,
   applyError,
@@ -36,6 +37,8 @@ export function MarkConfirm({
   unlockAvailable?: boolean;
   showUnlockedDetails: boolean;
   unlockedFields?: MarkDetailField[];
+  /** 到期站：正文仅显示提示 */
+  messageTip?: string;
   initialMarkReason?: string;
   /** 本次从邮件链接一键完成了标记 */
   justApplied?: boolean;
@@ -49,6 +52,7 @@ export function MarkConfirm({
   const [busy, setBusy] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(showUnlockedDetails);
   const [detailFields, setDetailFields] = useState(unlockedFields);
+  const [bodyTip, setBodyTip] = useState(messageTip);
 
   const marked = status === "valid" || status === "invalid";
 
@@ -79,10 +83,13 @@ export function MarkConfirm({
     if (data.status === "valid") {
       setMarkReason("");
       setSavedReason("");
-      setDetailsVisible(!!data.showUnlockedDetails);
-      if (Array.isArray(data.unlockedFields)) {
-        setDetailFields(data.unlockedFields);
-      }
+    }
+    setDetailsVisible(!!data.showUnlockedDetails);
+    if (Array.isArray(data.unlockedFields)) {
+      setDetailFields(data.unlockedFields);
+    }
+    if (typeof data.messageTip === "string") {
+      setBodyTip(data.messageTip);
     }
     setOkMsg(action === "valid" ? "已标记为有效" : "已标记为无效");
   }
@@ -154,14 +161,22 @@ export function MarkConfirm({
         </div>
       )}
 
-      {detailsVisible && detailFields.length > 0 ? (
+      {detailsVisible && (bodyTip || detailFields.length > 0) ? (
         <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden">
           <div className="px-3 py-2 text-sm font-medium bg-black/[0.02] border-b border-[var(--line)]">
             询盘详细信息
           </div>
           <div className="divide-y divide-[var(--line)]">
+            {bodyTip ? (
+              <div className="px-3 py-2.5 text-sm">
+                <div className="text-[11px] text-[var(--muted)] mb-1">Message</div>
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-[13px] leading-relaxed text-amber-900">
+                  {bodyTip}
+                </div>
+              </div>
+            ) : null}
             {detailFields.map((f) => (
-              <div key={f.label} className="px-3 py-2.5 text-sm">
+              <div key={`${f.label}-${f.value.slice(0, 24)}`} className="px-3 py-2.5 text-sm">
                 <div className="text-[11px] text-[var(--muted)] mb-1">{f.label}</div>
                 {f.html ? (
                   <div

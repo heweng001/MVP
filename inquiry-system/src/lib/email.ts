@@ -3,14 +3,13 @@ import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { appUrl } from "./constants";
 import { getSmtpConfig, isSmtpReady, type SmtpConfig } from "./settings";
+import type { MailFieldRow, MailFileAttachment } from "./inquiry-mail-fields";
 
 async function resolveIpv4Host(hostname: string) {
-  // nodemailer 会在 A/AAAA 间随机选址；机器有 IPv6 网卡但无路由时会 ENETUNREACH
   const { address } = await dns.lookup(hostname, { family: 4 });
   return address;
 }
 
-/** 避免 587+SSL / 465+明文 这类组合触发 wrong version number */
 function normalizeTlsMode(cfg: SmtpConfig) {
   const port = cfg.port || 587;
   if (port === 465) {
@@ -36,7 +35,6 @@ async function transporterFrom(cfg: SmtpConfig) {
     host,
     port: mode.port,
     secure: mode.secure,
-    // 用 IP 连接时保留原主机名给 TLS/SNI
     servername: cfg.host,
     requireTLS: mode.requireTLS,
     tls: { servername: cfg.host },
@@ -63,12 +61,16 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
-  /** 插件板块数据：entry_geolocation / entry_user_journey；Hidden 可含 page_url */
-  hiddenFields?: { label: string; value: string; html?: boolean; hint?: boolean }[];
+  /** 分割线上方附加字段（非标准列） */
+  extraFields?: MailFieldRow[];
+  /** 分割线下方字段（提示或明文） */
+  belowFields?: MailFieldRow[];
   /** 询盘正文被门控为提示文案（如网站到期） */
   messageHint?: boolean;
   /** SEO 未到期：引导标记有效后查看详细信息 */
   unlockHint?: string;
+  /** 随信转发的附件（URL） */
+  fileAttachments?: MailFileAttachment[];
 };
 
 function parseList(s: string) {
@@ -85,6 +87,52 @@ export function parseEmails(toEmails: string, ccEmails = "") {
   };
 }
 
+function renderFieldRowsHtml(rows: MailFieldRow[], labelWidth = "110px") {
+  return rows
+    .map((f) => {
+      const body = f.hint
+        ? hintHtml(f.value)
+        : f.html
+          ? sanitizeJourneyHtml(f.value)
+          : nl2br(escapeHtml(f.value));
+      return `<tr><td style="padding:6px 0;color:#666;width:${labelWidth};vertical-align:top;">${escapeHtml(f.label)}</td><td style="padding:6px 0;vertical-align:top;">${body}</td></tr>`;
+    })
+    .join("");
+}
+
+function renderFieldRowsText(rows: MailFieldRow[]) {
+  return rows.map((f) => `${f.label}：\n${f.html && !f.hint ? stripHtml(f.value) : f.value}`);
+}
+
+const MAX_ATTACH_BYTES = 8 * 1024 * 1024;
+const MAX_ATTACH_COUNT = 8;
+
+async function fetchAttachments(files: MailFileAttachment[]) {
+  const out: { filename: string; content: Buffer }[] = [];
+  const notes: string[] = [];
+  for (const file of files.slice(0, MAX_ATTACH_COUNT)) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(file.url, { signal: ctrl.signal, redirect: "follow" });
+      clearTimeout(timer);
+      if (!res.ok) {
+        notes.push(`${file.filename}（HTTP ${res.status}）`);
+        continue;
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > MAX_ATTACH_BYTES) {
+        notes.push(`${file.filename}（超过 8MB）`);
+        continue;
+      }
+      out.push({ filename: file.filename, content: buf });
+    } catch (e) {
+      notes.push(`${file.filename}（${e instanceof Error ? e.message : "下载失败"}）`);
+    }
+  }
+  return { attachments: out, notes };
+}
+
 export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const cfg = await getSmtpConfig();
   const transport = await transporterFrom(cfg);
@@ -92,35 +140,23 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const validUrl = `${markBase}?a=valid`;
   const invalidUrl = `${markBase}?a=invalid`;
 
-  const hidden = payload.hiddenFields || [];
-  const hiddenRowsHtml = hidden
-    .map((f) => {
-      const body = f.hint
-        ? hintHtml(f.value)
-        : f.html
-          ? sanitizeJourneyHtml(f.value)
-          : nl2br(escapeHtml(f.value));
-      return `<tr><td style="padding:6px 8px;color:#666;width:150px;vertical-align:top;border:1px solid #e2e8f0;">${escapeHtml(f.label)}</td><td style="padding:6px 8px;vertical-align:top;border:1px solid #e2e8f0;">${body}</td></tr>`;
-    })
-    .join("");
-  const hiddenBlockHtml = hidden.length
-    ? `
-    <div style="margin-top:20px;">
-      <p style="margin:0 0 8px;"><strong>隐藏字段 / Hidden fields</strong></p>
-      <table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;">
-        ${hiddenRowsHtml}
-      </table>
-    </div>`
-    : "";
-  const hiddenRowsText = hidden.length
-    ? ["", "隐藏字段 / Hidden fields：", ...hidden.map((f) => `${f.label}：\n${f.html && !f.hint ? stripHtml(f.value) : f.value}`)].join(
-        "\n",
-      )
-    : "";
+  const extra = payload.extraFields || [];
+  const below = payload.belowFields || [];
+  const files = payload.fileAttachments || [];
 
   const messageHtml = payload.messageHint
     ? hintHtml(payload.message)
     : nl2br(escapeHtml(payload.message));
+
+  const extraRowsHtml = renderFieldRowsHtml(extra);
+  const belowRowsHtml = below.length
+    ? `
+    <div style="margin-top:20px;">
+      <table style="border-collapse:collapse;width:100%;max-width:640px;">
+        ${renderFieldRowsHtml(below, "150px")}
+      </table>
+    </div>`
+    : "";
 
   const markBlockHtml = `
     <div style="margin-top:16px;">
@@ -141,14 +177,17 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       </p>
     </div>`;
 
-  const footerHintsHtml = [
-    payload.unlockHint
-      ? `<div style="margin-top:20px;">${hintHtml(payload.unlockHint)}</div>`
-      : "",
-    hiddenBlockHtml,
-  ]
-    .filter(Boolean)
-    .join("");
+  const unlockHtml = payload.unlockHint
+    ? `<div style="margin-top:20px;">${hintHtml(payload.unlockHint)}</div>`
+    : "";
+
+  const { attachments, notes: attachNotes } = files.length
+    ? await fetchAttachments(files)
+    : { attachments: [], notes: [] as string[] };
+
+  const attachNoteHtml = attachNotes.length
+    ? `<p style="margin-top:12px;color:#b45309;font-size:12px;">部分附件未能加入邮件：${escapeHtml(attachNotes.join("；"))}</p>`
+    : "";
 
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
@@ -159,10 +198,13 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
       <tr><td style="padding:6px 0;color:#666;">Phone/WhatsApp</td><td>${escapeHtml(payload.phone)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Message</td><td>${messageHtml}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">Page URL</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
+      ${extraRowsHtml}
     </table>
+    ${attachNoteHtml}
     ${separatorHtml}
     ${markBlockHtml}
-    ${footerHintsHtml}
+    ${unlockHtml}
+    ${belowRowsHtml}
   </div>`;
 
   const text = [
@@ -172,6 +214,8 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     `Phone/WhatsApp：${payload.phone}`,
     `Message：${payload.message}`,
     `Page URL：${payload.pageUrl}`,
+    ...renderFieldRowsText(extra),
+    ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
     "",
     "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
     "",
@@ -181,7 +225,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     "",
     "点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记",
     ...(payload.unlockHint ? ["", payload.unlockHint] : []),
-    ...(hiddenRowsText ? [hiddenRowsText] : []),
+    ...renderFieldRowsText(below),
   ].join("\n");
 
   if (!transport) {
@@ -202,6 +246,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     subject: `[询盘] ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`,
     text,
     html,
+    attachments: attachments.length ? attachments : undefined,
   });
 
   return { ok: true as const, skipped: false };
@@ -268,7 +313,7 @@ export async function sendPromoEditLink(opts: {
 }
 
 function escapeHtml(s: string) {
-  return s
+  return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -283,14 +328,6 @@ function hintHtml(s: string) {
   return `<span style="display:inline-block;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:4px;color:#9a3412;font-size:13px;line-height:1.5;">${escapeHtml(s)}</span>`;
 }
 
-/** 仅保留旅程表格常用标签 */
-function sanitizeJourneyHtml(html: string) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/\son\w+="[^"]*"/gi, "")
-    .replace(/\son\w+='[^']*'/gi, "");
-}
-
 function stripHtml(html: string) {
   return html
     .replace(/<br\s*\/?>/gi, "\n")
@@ -299,4 +336,11 @@ function stripHtml(html: string) {
     .replace(/<[^>]+>/g, " ")
     .replace(/[ \t]+/g, " ")
     .trim();
+}
+
+function sanitizeJourneyHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "");
 }

@@ -41,13 +41,15 @@ export async function POST(req: NextRequest) {
   }
 
   const caps = getMarkCapabilities(result.inquiry);
+  const detail = caps.showUnlockedDetails
+    ? unlockedDetailFields(result.inquiry)
+    : { fields: [], messageTip: "" };
   return NextResponse.json({
     ok: true,
     status: result.inquiry.status,
     markReason: result.inquiry.markReason,
     showUnlockedDetails: caps.showUnlockedDetails,
-    unlockedFields: caps.showUnlockedDetails
-      ? unlockedDetailFields(result.inquiry.rawPayload)
-      : [],
+    unlockedFields: detail.fields,
+    messageTip: detail.messageTip,
   });
 }

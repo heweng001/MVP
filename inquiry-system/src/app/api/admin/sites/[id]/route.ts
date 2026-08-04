@@ -3,6 +3,11 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
+import {
+  parseMailHiddenFields,
+  serializeMailHiddenFields,
+} from "@/lib/mail-hidden-config";
+import { discoverFieldOptionsFromPayloads } from "@/lib/inquiry-mail-fields";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,7 +20,22 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     include: { client: true, forms: true },
   });
   if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ site });
+
+  const recent = await prisma.inquiry.findMany({
+    where: { siteId: id },
+    orderBy: { submittedAt: "desc" },
+    take: 30,
+    select: { rawPayload: true },
+  });
+  const fieldOptions = discoverFieldOptionsFromPayloads(recent.map((r) => r.rawPayload));
+
+  return NextResponse.json({
+    site: {
+      ...site,
+      mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
+    },
+    fieldOptions,
+  });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -43,6 +63,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         body.productKeywords !== undefined ? String(body.productKeywords) : undefined,
       spamExtraWords:
         body.spamExtraWords !== undefined ? String(body.spamExtraWords) : undefined,
+      mailHiddenFields:
+        body.mailHiddenFields !== undefined
+          ? serializeMailHiddenFields(
+              Array.isArray(body.mailHiddenFields)
+                ? body.mailHiddenFields.map(String)
+                : parseMailHiddenFields(String(body.mailHiddenFields || "")),
+            )
+          : undefined,
       enabled: body.enabled !== undefined ? Boolean(body.enabled) : undefined,
     },
   });
@@ -52,7 +80,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     await syncClientServiceDates(existing.clientId);
   }
 
-  return NextResponse.json({ site });
+  return NextResponse.json({
+    site: {
+      ...site,
+      mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
+    },
+  });
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {

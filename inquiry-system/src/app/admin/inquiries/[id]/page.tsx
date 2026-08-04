@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
-import { extractHiddenFields } from "@/lib/wp-fields";
+import { collectInquiryFieldParts } from "@/lib/inquiry-mail-fields";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -23,7 +23,17 @@ export default async function InquiryDetailPage({ params }: Ctx) {
     hits = [];
   }
 
-  const hiddenFields = extractHiddenFields(item.rawPayload);
+  const parts = collectInquiryFieldParts({
+    rawPayload: item.rawPayload,
+    mailHiddenFieldsRaw: item.site.mailHiddenFields,
+    name: item.name,
+    email: item.email,
+    phone: item.phone,
+    message: item.message,
+    pageUrl: item.pageUrl,
+  });
+  const visibleFields = parts.above;
+  const hiddenConfigured = parts.belowRaw;
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -89,13 +99,13 @@ export default async function InquiryDetailPage({ params }: Ctx) {
               {item.message || "(空)"}
             </dd>
           </div>
-          {hiddenFields.length ? (
+          {visibleFields.length ? (
             <div className="md:col-span-2">
-              <dt className="text-[var(--muted)] mb-1">隐藏字段（WPForms Hidden）</dt>
+              <dt className="text-[var(--muted)] mb-1">其它字段（邮件分割线上方）</dt>
               <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
                 <table className="w-full text-sm">
                   <tbody>
-                    {hiddenFields.map((f) => (
+                    {visibleFields.map((f) => (
                       <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
                         <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
                         <td className="px-3 py-2 break-all whitespace-pre-wrap">
@@ -112,6 +122,51 @@ export default async function InquiryDetailPage({ params }: Ctx) {
                     ))}
                   </tbody>
                 </table>
+              </dd>
+            </div>
+          ) : null}
+          {hiddenConfigured.length ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)] mb-1">配置为隐藏的字段（邮件分割线下方）</dt>
+              <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {hiddenConfigured.map((f) => (
+                      <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
+                        <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
+                        <td className="px-3 py-2 break-all whitespace-pre-wrap">
+                          {f.html ? (
+                            <div
+                              className="text-sm [&_table]:w-full [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-1"
+                              dangerouslySetInnerHTML={{ __html: f.value }}
+                            />
+                          ) : (
+                            f.value
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </dd>
+            </div>
+          ) : null}
+          {parts.attachments.length ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)] mb-1">附件</dt>
+              <dd className="text-sm space-y-1">
+                {parts.attachments.map((a) => (
+                  <div key={a.url}>
+                    <a
+                      href={a.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--brand)] break-all underline"
+                    >
+                      {a.filename}
+                    </a>
+                  </div>
+                ))}
               </dd>
             </div>
           ) : null}
