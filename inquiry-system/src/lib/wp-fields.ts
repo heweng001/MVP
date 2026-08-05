@@ -93,7 +93,13 @@ type SmartKind = "page_url" | "entry_geolocation" | "combined" | "other";
 function classifyHidden(f: WpFormFieldRow): SmartKind {
   const n = normLabel(f.label);
   if (/entrygeolocation|geolocation|地理位置|geo/.test(n)) return "entry_geolocation";
-  if (/^pageurl$|来源页|页面链接|pageurl|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n) && !/国家|geo|journey/.test(n)) {
+  // inquiry url / page url / 询盘页面 等统一为 page_url
+  if (
+    /^(pageurl|inquiryurl|inquirypage|sourceurl|sourcepage|formurl|referrerurl|refererurl|提交页面|来源页|来源页面|页面链接|询盘页面|询盘链接|发询盘页面|买家发询盘页面)$|pageurl|inquiryurl|inquirypage|买家发询盘页面|询盘页面|发询盘页面|来源页|页面链接|询盘链接/.test(
+      n,
+    ) &&
+    !/国家|geo|journey|地理|路径/.test(n)
+  ) {
     return "page_url";
   }
   if (/询盘链接|链接.*国家|国家.*链接|pageurl.*geo|geo.*page/.test(n)) return "combined";

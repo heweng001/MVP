@@ -84,13 +84,17 @@ function labelLooksLikeMessage(label: string) {
   );
 }
 
+/** 页面链接类字段标签（规范化后，无空格下划线） */
+function isPageUrlLabelKey(n: string) {
+  if (!n) return false;
+  if (/国家|geo|journey|地理|路径/.test(n)) return false;
+  return /^(pageurl|inquiryurl|inquirypage|sourceurl|sourcepage|formurl|referrerurl|refererurl|提交页面|来源页|来源页面|页面链接|询盘页面|询盘链接|发询盘页面|买家发询盘页面)$|pageurl|inquiryurl|inquirypage|sourceurl|买家发询盘页面|询盘页面|发询盘页面|来源页|页面链接|询盘链接/.test(
+    n,
+  );
+}
+
 function isPageUrlField(f: WpFormFieldRow, pageUrl: string) {
-  const n = normFieldKey(f.label);
-  if (
-    /^pageurl$|来源页|页面链接|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n)
-  ) {
-    return true;
-  }
+  if (isPageUrlLabelKey(normFieldKey(f.label))) return true;
   if (pageUrl && f.value.trim() === pageUrl.trim()) return true;
   return false;
 }
@@ -124,9 +128,7 @@ function classifyBuiltin(f: MailFieldRow): "geo" | "journey" | "page_url" | "oth
     return "journey";
   }
   if (/entrygeolocation|geolocation|地理位置|买家的地理位置/.test(n)) return "geo";
-  if (/^pageurl$|来源页|页面链接|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n)) {
-    return "page_url";
-  }
+  if (isPageUrlLabelKey(n)) return "page_url";
   return "other";
 }
 
@@ -517,7 +519,10 @@ export function discoverFieldOptionsFromPayloads(rawPayloads: string[]): {
   map.set("journey", "买家浏览路径（默认隐藏）");
 
   for (const raw of rawPayloads) {
-    const pageUrl = "";
+    const panel = extractHiddenFields(raw);
+    const knownPageUrl =
+      panel.find((p) => p.id === "smart-page_url")?.value.trim() || "";
+
     for (const f of parseWpFormFields(raw)) {
       if (!f.id || isFileField(f)) continue;
       if (/\{entry_(user_journey|geolocation)\}/i.test(f.value)) continue;
@@ -525,15 +530,14 @@ export function discoverFieldOptionsFromPayloads(rawPayloads: string[]): {
       const builtin = classifyBuiltin({ id: f.id, label: f.label, value: f.value });
       if (builtin === "geo") continue;
       if (builtin === "journey") continue;
-      if (builtin === "page_url" || isPageUrlField(f, pageUrl)) {
+      if (builtin === "page_url" || isPageUrlField(f, knownPageUrl)) {
         if (!map.has("page_url")) map.set("page_url", "买家发询盘页面");
         continue;
       }
       if (!map.has(f.id)) map.set(f.id, f.label || f.id);
     }
 
-    const panel = extractHiddenFields(raw);
-    if (panel.some((p) => p.id === "smart-page_url" && p.value.trim())) {
+    if (knownPageUrl) {
       if (!map.has("page_url")) map.set("page_url", "买家发询盘页面");
     }
   }
