@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.10
+ * Version: 1.0.11
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -150,6 +150,74 @@ final class Inquiry_Bridge_Plugin
             $type = isset($field['type']) ? $field['type'] : '';
             if (in_array($type, $types, true)) {
                 return isset($field['value']) ? (string) $field['value'] : '';
+            }
+        }
+        return '';
+    }
+
+    /** 字段标签规范化，便于匹配 */
+    private static function field_label_key($field)
+    {
+        $label = '';
+        if (isset($field['name']) && (string) $field['name'] !== '') {
+            $label = (string) $field['name'];
+        } elseif (isset($field['label']) && (string) $field['label'] !== '') {
+            $label = (string) $field['label'];
+        }
+        $label = strtolower($label);
+        return preg_replace('/[\s_\-.:：()（）\[\]{}]+/u', '', $label);
+    }
+
+    private static function label_is_company($key)
+    {
+        if ($key === '') {
+            return false;
+        }
+        return (bool) preg_match('/company|organization|organisation|business|corp|firm|公司|企业|单位|机构/', $key);
+    }
+
+    private static function label_is_name($key)
+    {
+        if ($key === '') {
+            return false;
+        }
+        if (self::label_is_company($key)) {
+            return false;
+        }
+        // fullname / yourname / contactname / 姓名 等；避免单独匹配过宽的 "na"
+        return (bool) preg_match('/^(name|fullname|fullname|yourname|contactname|firstname|lastname|姓名|名字|联系人)$|(^|[^a-z])name([^a-z]|$)|姓名|名字|联系人/', $key);
+    }
+
+    /**
+     * 猜测姓名：优先 WPForms Name 类型；勿把 Company 等 text 字段当成 Name
+     * （旧逻辑 guess(['name','text']) 会命中排在前面的 Company）
+     */
+    private static function guess_name($fields)
+    {
+        if (!is_array($fields)) {
+            return '';
+        }
+        foreach ($fields as $field) {
+            $type = isset($field['type']) ? $field['type'] : '';
+            if ($type === 'name') {
+                $v = isset($field['value']) ? trim((string) $field['value']) : '';
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+        }
+        foreach ($fields as $field) {
+            $type = isset($field['type']) ? $field['type'] : '';
+            if ($type !== 'text' && $type !== '') {
+                continue;
+            }
+            $key = self::field_label_key($field);
+            if (!self::label_is_name($key)) {
+                continue;
+            }
+            $v = isset($field['value']) ? trim((string) $field['value']) : '';
+            if ($v !== '') {
+                return $v;
             }
         }
         return '';
@@ -893,7 +961,7 @@ final class Inquiry_Bridge_Plugin
         $message = self::field_value($fields, $settings['message_field']);
 
         if ($name === '') {
-            $name = self::guess_field($fields, ['name', 'text']);
+            $name = self::guess_name($fields);
         }
         if ($email === '') {
             $email = self::guess_field($fields, ['email']);

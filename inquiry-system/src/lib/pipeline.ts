@@ -4,7 +4,7 @@ import { InquiryStatus } from "./constants";
 import { scoreSpam } from "./spam";
 import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
-import { buildInquiryMailContent } from "./inquiry-mail-fields";
+import { buildInquiryMailContent, resolveInquiryName } from "./inquiry-mail-fields";
 
 export type IngestBody = {
   site_key: string;
@@ -68,10 +68,11 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
   if (!inquiry) throw new Error("Inquiry not found");
 
   const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
+  const displayName = resolveInquiryName(inquiry.rawPayload, inquiry.name);
   const content = buildInquiryMailContent({
     site: inquiry.site,
     rawPayload: inquiry.rawPayload,
-    name: inquiry.name,
+    name: displayName,
     email: inquiry.email,
     phone: inquiry.phone,
     message: inquiry.message,
@@ -83,7 +84,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     siteName: inquiry.site.domain,
     siteDomain: inquiry.site.domain,
     markToken: inquiry.markToken,
-    name: inquiry.name,
+    name: displayName,
     email: inquiry.email,
     phone: inquiry.phone,
     message: content.message,
@@ -180,7 +181,10 @@ export async function ingestInquiry(body: IngestBody) {
     return { inquiry: enriched ?? existing, duplicated: true };
   }
 
-  const name = String(body.name ?? "");
+  const name = resolveInquiryName(
+    JSON.stringify({ fields: body.fields ?? {} }),
+    String(body.name ?? ""),
+  );
   const email = String(body.email ?? "");
   const phone = String(body.phone ?? "");
   const subject = "";

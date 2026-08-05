@@ -60,12 +60,52 @@ function isFileField(f: WpFormFieldRow) {
   return t === "file" || t === "upload" || t === "file-upload" || t === "media";
 }
 
+function normFieldKey(label: string) {
+  return label.toLowerCase().replace(/[{}\s_\-.:：()（）\[\]{}]/g, "");
+}
+
+function labelLooksLikeCompany(label: string) {
+  const n = normFieldKey(label);
+  return /company|organization|organisation|business|corp|firm|公司|企业|单位|机构/.test(n);
+}
+
+function labelLooksLikeName(label: string) {
+  const n = normFieldKey(label);
+  if (!n || labelLooksLikeCompany(label)) return false;
+  return /^(name|fullname|fullname|yourname|contactname|firstname|lastname|姓名|名字|联系人)$|(^|[^a-z])name([^a-z]|$)|姓名|名字|联系人/.test(
+    n,
+  );
+}
+
+/**
+ * 从 rawPayload 纠正 Name：优先 WPForms name 类型，其次姓名类标签；排除 Company
+ * （兼容插件旧版把 Company 误写入 name 的数据）
+ */
+export function resolveInquiryName(
+  rawPayload: string | null | undefined,
+  storedName = "",
+): string {
+  const all = parseWpFormFields(rawPayload);
+  for (const f of all) {
+    if (f.type === "name" && f.value.trim()) return f.value.trim();
+  }
+  for (const f of all) {
+    if (f.type !== "text" && f.type !== "") continue;
+    if (!labelLooksLikeName(f.label)) continue;
+    if (f.value.trim()) return f.value.trim();
+  }
+  return String(storedName || "").trim();
+}
+
 function isStandardMapped(
   f: WpFormFieldRow,
   basics: { name: string; email: string; phone: string; message: string; pageUrl: string },
 ) {
   const t = f.type.toLowerCase();
   if (t === "name" || t === "email" || t === "phone") return true;
+  // Company 等必须保留在附加字段里，不能因与 name 值相同被吞掉
+  if (labelLooksLikeCompany(f.label)) return false;
+
   const v = f.value.trim();
   if (!v) return true;
   if (basics.name && v === basics.name.trim()) return true;
@@ -101,7 +141,7 @@ export function collectInquiryFieldParts(opts: {
 }) {
   const hideIds = new Set(parseMailHiddenFields(opts.mailHiddenFieldsRaw));
   const basics = {
-    name: opts.name || "",
+    name: resolveInquiryName(opts.rawPayload, opts.name || ""),
     email: opts.email || "",
     phone: opts.phone || "",
     message: opts.message || "",

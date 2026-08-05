@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
-import { collectInquiryFieldParts } from "@/lib/inquiry-mail-fields";
+import { collectInquiryFieldParts, resolveInquiryName } from "@/lib/inquiry-mail-fields";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -23,10 +23,11 @@ export default async function InquiryDetailPage({ params }: Ctx) {
     hits = [];
   }
 
+  const displayName = resolveInquiryName(item.rawPayload, item.name);
   const parts = collectInquiryFieldParts({
     rawPayload: item.rawPayload,
     mailHiddenFieldsRaw: item.site.mailHiddenFields,
-    name: item.name,
+    name: displayName,
     email: item.email,
     phone: item.phone,
     message: item.message,
@@ -73,7 +74,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
           </div>
           <div>
             <dt className="text-[var(--muted)]">姓名</dt>
-            <dd>{item.name || "—"}</dd>
+            <dd>{displayName || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">邮箱</dt>

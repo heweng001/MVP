@@ -17,6 +17,7 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
+- **v1.0.11**：修复 Name 猜测误用 Company（不再用泛化 `text` 兜底；优先 Name 类型 / 姓名类标签）
 - **v1.0.10**：取消推送前等待 5 秒与 journey 补推；保留多源抓取（独立表 / meta / Cookie/POST）
 - **v1.0.9**：User Journey 修复——读独立表/`user_uuid`、Cookie/POST；曾在 `process_complete` 补推（已于 1.0.10 移除）
 - **v1.0.8**：曾推送前等待约 5 秒（已于 1.0.10 移除）
