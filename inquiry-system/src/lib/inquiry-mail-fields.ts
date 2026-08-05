@@ -86,7 +86,11 @@ function labelLooksLikeMessage(label: string) {
 
 function isPageUrlField(f: WpFormFieldRow, pageUrl: string) {
   const n = normFieldKey(f.label);
-  if (/^pageurl$|来源页|页面链接|买家发询盘页面/.test(n)) return true;
+  if (
+    /^pageurl$|来源页|页面链接|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n)
+  ) {
+    return true;
+  }
   if (pageUrl && f.value.trim() === pageUrl.trim()) return true;
   return false;
 }
@@ -120,7 +124,9 @@ function classifyBuiltin(f: MailFieldRow): "geo" | "journey" | "page_url" | "oth
     return "journey";
   }
   if (/entrygeolocation|geolocation|地理位置|买家的地理位置/.test(n)) return "geo";
-  if (/^pageurl$|来源页|页面链接|买家发询盘页面/.test(n)) return "page_url";
+  if (/^pageurl$|来源页|页面链接|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n)) {
+    return "page_url";
+  }
   return "other";
 }
 

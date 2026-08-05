@@ -93,7 +93,9 @@ type SmartKind = "page_url" | "entry_geolocation" | "combined" | "other";
 function classifyHidden(f: WpFormFieldRow): SmartKind {
   const n = normLabel(f.label);
   if (/entrygeolocation|geolocation|地理位置|geo/.test(n)) return "entry_geolocation";
-  if (/^pageurl$|来源页|页面链接|pageurl/.test(n) && !/国家|geo|journey/.test(n)) return "page_url";
+  if (/^pageurl$|来源页|页面链接|pageurl|买家发询盘页面|询盘页面|发询盘页面|来源页面|提交页面/.test(n) && !/国家|geo|journey/.test(n)) {
+    return "page_url";
+  }
   if (/询盘链接|链接.*国家|国家.*链接|pageurl.*geo|geo.*page/.test(n)) return "combined";
   if (/https?:\/\/\S+\s+.+/i.test(f.value) && /[A-Z]{2}\b/.test(f.value)) return "combined";
   if (/^https?:\/\/\S+$/i.test(f.value.trim())) return "page_url";
