@@ -8,6 +8,36 @@ import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function FieldTable({
+  rows,
+}: {
+  rows: { id: string; label: string; value: string; html?: boolean; hint?: boolean }[];
+}) {
+  return (
+    <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.map((f) => (
+            <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
+              <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
+              <td className="px-3 py-2 break-all whitespace-pre-wrap">
+                {f.html ? (
+                  <div
+                    className="text-sm [&_table]:w-full [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-1"
+                    dangerouslySetInnerHTML={{ __html: f.value }}
+                  />
+                ) : (
+                  f.value
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </dd>
+  );
+}
+
 export default async function InquiryDetailPage({ params }: Ctx) {
   const { id } = await params;
   const item = await prisma.inquiry.findUnique({
@@ -62,27 +92,9 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dt className="text-[var(--muted)]">标记时间</dt>
             <dd>{item.markedAt ? format(item.markedAt, "yyyy-MM-dd HH:mm:ss") : "—"}</dd>
           </div>
-          <div className="md:col-span-2">
-            <dt className="text-[var(--muted)]">客户反馈原因</dt>
-            <dd className="whitespace-pre-wrap mt-1">
-              {item.markReason?.trim() ? item.markReason : "—"}
-            </dd>
-          </div>
           <div>
             <dt className="text-[var(--muted)]">垃圾分</dt>
             <dd>{item.spamScore}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--muted)]">姓名</dt>
-            <dd>{displayName || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--muted)]">邮箱</dt>
-            <dd>{item.email || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--muted)]">phone/whatsapp</dt>
-            <dd>{item.phone || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">Form / Entry</dt>
@@ -91,65 +103,21 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             </dd>
           </div>
           <div className="md:col-span-2">
-            <dt className="text-[var(--muted)]">来源页</dt>
-            <dd className="break-all">{item.pageUrl || "—"}</dd>
-          </div>
-          <div className="md:col-span-2">
-            <dt className="text-[var(--muted)]">正文</dt>
-            <dd className="whitespace-pre-wrap mt-1 bg-black/[0.03] rounded-lg p-3">
-              {item.message || "(空)"}
+            <dt className="text-[var(--muted)]">客户反馈原因</dt>
+            <dd className="whitespace-pre-wrap mt-1">
+              {item.markReason?.trim() ? item.markReason : "—"}
             </dd>
           </div>
           {visibleFields.length ? (
             <div className="md:col-span-2">
-              <dt className="text-[var(--muted)] mb-1">其它字段（邮件分割线上方）</dt>
-              <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {visibleFields.map((f) => (
-                      <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
-                        <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
-                        <td className="px-3 py-2 break-all whitespace-pre-wrap">
-                          {f.html ? (
-                            <div
-                              className="text-sm [&_table]:w-full [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-1"
-                              dangerouslySetInnerHTML={{ __html: f.value }}
-                            />
-                          ) : (
-                            f.value
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </dd>
+              <dt className="text-[var(--muted)] mb-1">表单字段（邮件分割线上方）</dt>
+              <FieldTable rows={visibleFields} />
             </div>
           ) : null}
           {hiddenConfigured.length ? (
             <div className="md:col-span-2">
               <dt className="text-[var(--muted)] mb-1">配置为隐藏的字段（邮件分割线下方）</dt>
-              <dd className="rounded-lg border border-[var(--line)] overflow-hidden">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {hiddenConfigured.map((f) => (
-                      <tr key={f.id} className="border-t border-[var(--line)] first:border-t-0">
-                        <td className="px-3 py-2 text-[var(--muted)] w-[30%] align-top">{f.label}</td>
-                        <td className="px-3 py-2 break-all whitespace-pre-wrap">
-                          {f.html ? (
-                            <div
-                              className="text-sm [&_table]:w-full [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-1"
-                              dangerouslySetInnerHTML={{ __html: f.value }}
-                            />
-                          ) : (
-                            f.value
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </dd>
+              <FieldTable rows={hiddenConfigured} />
             </div>
           ) : null}
           {parts.attachments.length ? (

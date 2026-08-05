@@ -249,7 +249,8 @@ export function SiteFormConfigPanel({
         <Step n={4} title="邮件隐藏字段（可选）">
           <p className="text-xs text-[var(--muted)]">
             勾选的字段放在邮件分割线下方：SEO
-            站需客户标「有效」后才在反馈页可见真值；展示型站即使标有效也不显示真值。未勾选且非空的字段显示在分割线上方。地理位置与浏览路径默认隐藏且不可取消。
+            站需客户标「有效」后才在反馈页可见真值；展示型站即使标有效也不显示真值。未勾选且非空的字段显示在分割线上方。可勾选全部表单字段（含
+            Name / Email / Phone / Message 等）；地理位置与浏览路径默认隐藏且不可取消。
           </p>
           <div className="space-y-1.5 max-h-56 overflow-y-auto border border-[var(--line)] rounded-lg p-2">
             {options.map((opt) => {

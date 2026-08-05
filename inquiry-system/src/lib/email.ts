@@ -144,10 +144,6 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const below = payload.belowFields || [];
   const files = payload.fileAttachments || [];
 
-  const messageHtml = payload.messageHint
-    ? hintHtml(payload.message)
-    : nl2br(escapeHtml(payload.message));
-
   const extraRowsHtml = renderFieldRowsHtml(extra);
   const belowRowsHtml = below.length
     ? `
@@ -189,17 +185,14 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ? `<p style="margin-top:12px;color:#b45309;font-size:12px;">部分附件未能加入邮件：${escapeHtml(attachNotes.join("；"))}</p>`
     : "";
 
+  const fieldsTableHtml = extra.length
+    ? `<table style="border-collapse:collapse;width:100%;max-width:640px;">${extraRowsHtml}</table>`
+    : `<p style="color:#888;">（本封询盘暂无可见字段）</p>`;
+
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
     <p>You have a new inquiry from website <strong>${escapeHtml(payload.siteName)}</strong> (${escapeHtml(payload.siteDomain)}).</p>
-    <table style="border-collapse:collapse;width:100%;max-width:640px;">
-      <tr><td style="padding:6px 0;color:#666;width:110px;">Name</td><td>${escapeHtml(payload.name)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">Email</td><td>${escapeHtml(payload.email)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">Phone/WhatsApp</td><td>${escapeHtml(payload.phone)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;vertical-align:top;">Message</td><td>${messageHtml}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">Page URL</td><td>${escapeHtml(payload.pageUrl)}</td></tr>
-      ${extraRowsHtml}
-    </table>
+    ${fieldsTableHtml}
     ${attachNoteHtml}
     ${separatorHtml}
     ${markBlockHtml}
@@ -209,11 +202,6 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
   const text = [
     `You have a new inquiry from website ${payload.siteName} (${payload.siteDomain}).`,
-    `Name：${payload.name}`,
-    `Email：${payload.email}`,
-    `Phone/WhatsApp：${payload.phone}`,
-    `Message：${payload.message}`,
-    `Page URL：${payload.pageUrl}`,
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
     "",
