@@ -191,7 +191,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
-    <p>You have a new inquiry from website <strong>${escapeHtml(payload.siteName)}</strong> (${escapeHtml(payload.siteDomain)}).</p>
+    <p>You have a new inquiry from website <strong>${escapeHtml(payload.siteName)}</strong>.</p>
     ${fieldsTableHtml}
     ${attachNoteHtml}
     ${separatorHtml}
@@ -201,7 +201,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   </div>`;
 
   const text = [
-    `You have a new inquiry from website ${payload.siteName} (${payload.siteDomain}).`,
+    `You have a new inquiry from website ${payload.siteName}.`,
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
     "",
