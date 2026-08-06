@@ -11,6 +11,7 @@ import {
   mailContentGate,
   type MailContentGate,
 } from "./mail-content-gate";
+import { formatUserJourneyHtml } from "./user-journey";
 
 export type MailFieldRow = {
   id: string;
@@ -251,6 +252,22 @@ export function collectInquiryFieldParts(opts: {
     );
     used.add("journey");
     used.add(journeyRow.id);
+  } else if (root?.user_journey != null && root.user_journey !== "") {
+    const journeyHtml = formatUserJourneyHtml(root.user_journey);
+    if (journeyHtml) {
+      pushPartitioned(
+        {
+          id: "journey",
+          label: "买家浏览路径",
+          value: journeyHtml,
+          html: true,
+        },
+        hideIds,
+        above,
+        belowRaw,
+      );
+      used.add("journey");
+    }
   }
 
   // 全部 WPForms 字段（含 name/email/phone/message 等）
@@ -443,14 +460,14 @@ export function buildInquiryMailContent(opts: {
     };
   }
 
-  // SEO 未到期：下方不放真值，统一引导提示
+  // SEO 未到期：下方不放真值，统一引导提示（始终提示可标有效解锁）
   if (gate.seoUnlock) {
     return {
       message: opts.message,
       messageHint: false,
       extraAbove: parts.above,
       below: [],
-      unlockHint: parts.belowRaw.length ? MAIL_TIPS.seoUnlock : "",
+      unlockHint: MAIL_TIPS.seoUnlock,
       attachments: parts.attachments,
     };
   }

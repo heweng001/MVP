@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.13
+ * Version: 1.0.14
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
-    const VERSION = '1.0.13';
+    const VERSION = '1.0.14';
 
     public static function init()
     {
@@ -877,9 +877,8 @@ final class Inquiry_Bridge_Plugin
 
     /**
      * 组装 location + journey。
-     * User Journey 展示只用 WPForms 原生 HTML（{entry_user_journey} Smart Tag），
-     * 不做自写表格格式化，也不延迟/补推。
-     * @param mixed $journey_from_request 请求侧 journey 兜底（仅存 raw）
+     * 优先 WPForms 原生 Smart Tag HTML；为空时用已抓到的 journey 数据生成同款表格（无延迟/补推）。
+     * @param mixed $journey_from_request 请求侧 journey 兜底
      */
     private static function build_location_journey($entry_id, $form_data, $fields, $entry = null, $journey_from_request = null)
     {
@@ -894,17 +893,9 @@ final class Inquiry_Bridge_Plugin
             ? $tags['geo']
             : self::format_location_text($location_raw);
 
-        // 仅用后台同款 Smart Tag HTML；结构化 raw 不再转成自定义表格
         $entry_user_journey = $tags['journey'];
-        if ($entry_user_journey === '' && is_string($journey_raw)) {
-            $trim = trim($journey_raw);
-            if (
-                $trim !== ''
-                && strpos($trim, '{entry_user_journey}') === false
-                && (stripos($trim, '<table') !== false || stripos($trim, '<tr') !== false)
-            ) {
-                $entry_user_journey = $trim;
-            }
+        if ($entry_user_journey === '') {
+            $entry_user_journey = self::render_user_journey_html($entry_id, $form_data, $fields, $journey_raw);
         }
 
         if ($entry_user_journey === '') {
@@ -917,6 +908,171 @@ final class Inquiry_Bridge_Plugin
             'entry_geolocation' => $entry_geolocation,
             'entry_user_journey' => $entry_user_journey,
         ];
+    }
+
+    /**
+     * 尽量产出与 WPForms 后台/邮件一致的 User Journey HTML。
+     * @param mixed $journey_raw
+     */
+    private static function render_user_journey_html($entry_id, $form_data, $fields, $journey_raw)
+    {
+        // 1) Addon 公开渲染 / 再次 Smart Tag（部分版本需 entry 已写库）
+        $from_addon = self::render_journey_via_addon($entry_id, $form_data, $fields);
+        if ($from_addon !== '') {
+            return $from_addon;
+        }
+
+        if ($journey_raw === null || $journey_raw === '') {
+            return '';
+        }
+
+        if (is_string($journey_raw)) {
+            $trim = trim($journey_raw);
+            if ($trim === '' || strpos($trim, '{entry_user_journey}') !== false) {
+                return '';
+            }
+            if (stripos($trim, '<table') !== false || stripos($trim, '<tr') !== false) {
+                return $trim;
+            }
+            $decoded = json_decode($trim, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $journey_raw = $decoded;
+            } else {
+                return '';
+            }
+        }
+
+        return self::format_journey_steps_html($journey_raw);
+    }
+
+    /** @param mixed $form_data @param mixed $fields */
+    private static function render_journey_via_addon($entry_id, $form_data, $fields)
+    {
+        $entry_id = absint($entry_id);
+
+        // 常见：Smart Tag 类 process
+        $classes = [
+            '\\WPFormsUserJourney\\SmartTags\\EntryUserJourney',
+            '\\WPFormsUserJourney\\SmartTags\\Entry_User_Journey',
+            '\\WPForms\\UserJourney\\SmartTags\\EntryUserJourney',
+        ];
+        foreach ($classes as $cls) {
+            if (!class_exists($cls)) {
+                continue;
+            }
+            try {
+                if (method_exists($cls, 'get_value')) {
+                    $obj = new $cls();
+                    $val = $obj->get_value($form_data, $fields, $entry_id);
+                    $html = self::normalize_journey_html($val);
+                    if ($html !== '') {
+                        return $html;
+                    }
+                }
+            } catch (Exception $e) {
+                // ignore
+            }
+        }
+
+        if (function_exists('wpforms_user_journey')) {
+            $uj = wpforms_user_journey();
+            foreach (['get_entry_user_journey_html', 'get_entry_html', 'render_entry'] as $method) {
+                if (is_object($uj) && method_exists($uj, $method)) {
+                    try {
+                        $val = $uj->{$method}($entry_id);
+                        $html = self::normalize_journey_html($val);
+                        if ($html !== '') {
+                            return $html;
+                        }
+                    } catch (Exception $e) {
+                        // ignore
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /** @param mixed $val */
+    private static function normalize_journey_html($val)
+    {
+        if (!is_string($val)) {
+            return '';
+        }
+        $j = trim($val);
+        if ($j === '' || strpos($j, '{entry_user_journey}') !== false) {
+            return '';
+        }
+        $text = trim(wp_strip_all_tags($j));
+        if ($text === '' || $text === '—' || strtolower($text) === 'n/a') {
+            return '';
+        }
+        return $j;
+    }
+
+    /** 将 steps/DB 行格式化为 WPForms 风格 HTML 表（Page / Date / Duration） */
+    private static function format_journey_steps_html($journey)
+    {
+        if (is_object($journey)) {
+            $journey = (array) $journey;
+        }
+        if (!is_array($journey) || $journey === []) {
+            return '';
+        }
+
+        if (isset($journey['steps']) && is_array($journey['steps'])) {
+            $steps = $journey['steps'];
+        } elseif (isset($journey['pages']) && is_array($journey['pages'])) {
+            $steps = $journey['pages'];
+        } elseif (isset($journey['journey']) && is_array($journey['journey'])) {
+            $steps = $journey['journey'];
+        } else {
+            $steps = $journey;
+        }
+
+        if ($steps && !isset($steps[0]) && (isset($steps['url']) || isset($steps['title']))) {
+            $steps = [$steps];
+        }
+
+        $rows = '';
+        foreach ($steps as $step) {
+            if (is_object($step)) {
+                $step = (array) $step;
+            }
+            if (!is_array($step)) {
+                continue;
+            }
+            $title = self::pick_step_str($step, ['title', 'pageTitle', 'page_title', 'name', 'page', 'post_title']);
+            $url = self::pick_step_str($step, ['url', 'pageUrl', 'page_url', 'href', 'path', 'permalink']);
+            $when = self::pick_step_str($step, ['date', 'datetime', 'timestamp', 'time', 'when', 'created', 'date_created', 'visited_at']);
+            $duration = self::pick_step_str($step, ['duration', 'timeOnPage', 'time_on_page', 'time_spent', 'spend']);
+            if ($title === '' && $url === '') {
+                continue;
+            }
+            if ($title === '') {
+                $title = $url;
+            }
+            $page_html = $url !== ''
+                ? '<a href="' . esc_url($url) . '">' . esc_html($title) . '</a>'
+                : esc_html($title);
+            $rows .= '<tr>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;">' . $page_html . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($when !== '' ? $when : '—') . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($duration !== '' ? $duration : '—') . '</td>'
+                . '</tr>';
+        }
+
+        if ($rows === '') {
+            return '';
+        }
+
+        return '<table style="border-collapse:collapse;width:100%;font-size:13px;">'
+            . '<thead><tr style="background:#f8fafc;text-align:left;color:#666;">'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Page</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Date</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Duration</th>'
+            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
     }
 
     /** 将 Location 板块数据格式化为可读文本（供中心系统展示） */

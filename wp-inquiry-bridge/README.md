@@ -17,8 +17,9 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
+- **v1.0.14**：Smart Tag 为空时，用已抓到的 journey 数据生成 WPForms 风格 HTML（Page/Date/Duration），避免询盘侧空白
 - **v1.0.13**：REST 自更新（`/wp-json/inquiry-bridge/v1/self-update`，校验 site_key，仅允许从询盘中心下载 zip）；配合中心「更新插件」
-- **v1.0.12**：User Journey 只推 WPForms 原生 HTML（`{entry_user_journey}` Smart Tag / 已是 HTML 的原文）；去掉自写中文表格格式化；仍无延迟/补推
+- **v1.0.12**：User Journey 优先 `{entry_user_journey}` Smart Tag；仍无延迟/补推
 - **v1.0.11**：修复 Name 猜测误用 Company（不再用泛化 `text` 兜底；优先 Name 类型 / 姓名类标签）
 - **v1.0.10**：取消推送前等待 5 秒与 journey 补推；保留多源抓取（独立表 / meta / Cookie/POST）
 - **v1.0.9**：User Journey 修复——读独立表/`user_uuid`、Cookie/POST；曾在 `process_complete` 补推（已于 1.0.10 移除）

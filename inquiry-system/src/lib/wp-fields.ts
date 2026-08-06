@@ -1,5 +1,6 @@
 import { localizeCountryCodes } from "./countries";
 import { formatGeolocationZh, parseGeoSmartBlob } from "./places";
+import { formatUserJourneyHtml } from "./user-journey";
 
 export type WpFormFieldRow = {
   id: string;
@@ -121,9 +122,17 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
       : null;
 
   const geoFromMeta = rootObj ? String(rootObj.entry_geolocation || "").trim() : "";
-  const journeyFromMeta = rootObj
+  let journeyFromMeta = rootObj
     ? String(rootObj.entry_user_journey || "").trim()
     : "";
+  // 插件常把结构化 steps 放在 user_journey，而 entry_user_journey（HTML）为空
+  if (
+    (!journeyFromMeta || journeyFromMeta.includes("{entry_user_journey}")) &&
+    rootObj?.user_journey != null &&
+    rootObj.user_journey !== ""
+  ) {
+    journeyFromMeta = formatUserJourneyHtml(rootObj.user_journey);
+  }
 
   const hiddens = parseWpFormFields(rawPayload).filter((f) => f.type === "hidden");
   let pageUrl = "";
