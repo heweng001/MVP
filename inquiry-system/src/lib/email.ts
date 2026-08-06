@@ -61,16 +61,19 @@ export type InquiryMailPayload = {
   pageUrl: string;
   formId: string;
   entryId: string;
-  /** 分割线上方附加字段（非标准列） */
   extraFields?: MailFieldRow[];
-  /** 分割线下方字段（提示或明文） */
   belowFields?: MailFieldRow[];
-  /** 询盘正文被门控为提示文案（如网站到期） */
   messageHint?: boolean;
-  /** SEO 未到期：引导标记有效后查看详细信息 */
+  /** 第一封请勿回复提示 */
+  doNotReplyHint?: string;
   unlockHint?: string;
-  /** 随信转发的附件（URL） */
   fileAttachments?: MailFileAttachment[];
+  /** 是否 Reply-To 买家邮箱；默认 false */
+  replyToBuyer?: boolean;
+  /** 是否包含有效/无效标记按钮；默认 true */
+  includeMarkButtons?: boolean;
+  /** 邮件主题后缀区分 */
+  phase?: "mark" | "followup";
 };
 
 function parseList(s: string) {
@@ -139,6 +142,8 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const markBase = `${appUrl()}/m/${payload.markToken}`;
   const validUrl = `${markBase}?a=valid`;
   const invalidUrl = `${markBase}?a=invalid`;
+  const includeMark = payload.includeMarkButtons !== false;
+  const phase = payload.phase || "mark";
 
   const extra = payload.extraFields || [];
   const below = payload.belowFields || [];
@@ -154,7 +159,12 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     </div>`
     : "";
 
-  const markBlockHtml = `
+  const doNotReplyHtml = payload.doNotReplyHint
+    ? `<div style="margin:12px 0 16px;">${hintHtml(payload.doNotReplyHint)}</div>`
+    : "";
+
+  const markBlockHtml = includeMark
+    ? `
     <div style="margin-top:16px;">
       <p><strong>请配合标记本封询盘，有利于我们提升询盘质量</strong></p>
       <p>
@@ -162,20 +172,29 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
         <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">标为无效</a>
       </p>
       <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记</p>
-    </div>`;
+    </div>`
+    : "";
 
-  const separatorHtml = `
+  const separatorHtml =
+    includeMark || below.length
+      ? `
     <div style="margin:20px 0 16px;border:none;border-top:2px dashed #94a3b8;padding-top:10px;text-align:center;">
       <p style="margin:0;font-size:14px;line-height:1.5;">
         ————
-        <span style="color:#dc2626;font-weight:700;">回复客户邮件前，请务必删掉分割线后所有内容！！！</span>
+        <span style="color:#dc2626;font-weight:700;">${
+          includeMark
+            ? "回复客户邮件前，请务必删掉分割线后所有内容！！！"
+            : "以下为补充说明（如有）"
+        }</span>
         ————
       </p>
-    </div>`;
+    </div>`
+      : "";
 
-  const unlockHtml = payload.unlockHint
-    ? `<div style="margin-top:20px;">${hintHtml(payload.unlockHint)}</div>`
-    : "";
+  const followupLeadHtml =
+    phase === "followup"
+      ? `<p style="margin:0 0 12px;padding:10px 12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:4px;color:#065f46;font-size:13px;line-height:1.5;">本邮件含买家联系邮箱。请直接点击「回复」联系买家（勿再使用第一封标记邮件回复）。</p>`
+      : "";
 
   const { attachments, notes: attachNotes } = files.length
     ? await fetchAttachments(files)
@@ -192,29 +211,40 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
     <p>You have a new inquiry from website <strong>${escapeHtml(payload.siteName)}</strong>.</p>
+    ${doNotReplyHtml}
+    ${followupLeadHtml}
     ${fieldsTableHtml}
     ${attachNoteHtml}
     ${separatorHtml}
     ${markBlockHtml}
-    ${unlockHtml}
     ${belowRowsHtml}
   </div>`;
 
-  const text = [
+  const textParts = [
     `You have a new inquiry from website ${payload.siteName}.`,
+    ...(payload.doNotReplyHint ? ["", payload.doNotReplyHint, ""] : []),
+    ...(phase === "followup"
+      ? ["", "本邮件含买家联系邮箱。请直接回复本邮件联系买家。", ""]
+      : []),
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
-    "",
-    "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
-    "",
-    "请配合标记本封询盘，有利于我们提升询盘质量",
-    `标为有效：${validUrl}`,
-    `标为无效：${invalidUrl}`,
-    "",
-    "点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记",
-    ...(payload.unlockHint ? ["", payload.unlockHint] : []),
-    ...renderFieldRowsText(below),
-  ].join("\n");
+  ];
+  if (includeMark) {
+    textParts.push(
+      "",
+      "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
+      "",
+      "请配合标记本封询盘，有利于我们提升询盘质量",
+      `标为有效：${validUrl}`,
+      `标为无效：${invalidUrl}`,
+      "",
+      "点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记",
+    );
+  }
+  if (below.length) {
+    textParts.push("", ...renderFieldRowsText(below));
+  }
+  const text = textParts.join("\n");
 
   if (!transport) {
     console.warn("[email] SMTP not configured; skipping send");
@@ -226,12 +256,14 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     throw new Error("No recipient configured for this form");
   }
 
+  const fromAddr = cfg.from || cfg.user || "noreply@example.com";
+  const subjectPrefix = phase === "followup" ? "[询盘·可回复买家]" : "[询盘]";
   await transport.sendMail({
-    from: cfg.from || cfg.user || "noreply@example.com",
+    from: fromAddr,
     to: payload.to.join(", "),
     cc: payload.cc?.length ? payload.cc.join(", ") : undefined,
-    replyTo: payload.email || undefined,
-    subject: `[询盘] ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`,
+    replyTo: payload.replyToBuyer ? payload.email || undefined : undefined,
+    subject: `${subjectPrefix} ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`,
     text,
     html,
     attachments: attachments.length ? attachments : undefined,

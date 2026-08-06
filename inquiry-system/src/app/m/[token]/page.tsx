@@ -19,6 +19,7 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
 
   let justApplied = false;
   let applyError = "";
+  let followupError = "";
   const capsBefore = getMarkCapabilities(inquiry);
 
   if (action && capsBefore.canInteract) {
@@ -29,6 +30,7 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
       const result = await applyMark(token, action);
       if (result.ok) {
         justApplied = true;
+        followupError = "followupError" in result ? result.followupError || "" : "";
         inquiry = await getInquiryByToken(token);
         if (!inquiry) notFound();
       } else {
@@ -42,7 +44,9 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
   const caps = getMarkCapabilities(inquiry);
   const detail = caps.showUnlockedDetails
     ? unlockedDetailFields(inquiry)
-    : { fields: [], messageTip: "" };
+    : { fields: [] as { id: string; label: string; value: string; html?: boolean; hint?: boolean }[], messageTip: "", followupTip: caps.followupTip };
+
+  const followupTip = detail.followupTip || caps.followupTip;
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-3 py-4 sm:px-6 sm:py-8 bg-[var(--bg)]">
@@ -67,6 +71,8 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
           showUnlockedDetails={caps.showUnlockedDetails}
           unlockedFields={detail.fields}
           messageTip={detail.messageTip}
+          followupTip={followupTip}
+          followupError={followupError}
           initialMarkReason={inquiry.markReason || ""}
           justApplied={justApplied}
           applyError={applyError}

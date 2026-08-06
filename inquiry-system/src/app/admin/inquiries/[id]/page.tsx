@@ -4,6 +4,7 @@ import { InquiryStatus, STATUS_LABELS } from "@/lib/constants";
 import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
 import { collectInquiryFieldParts, resolveInquiryName } from "@/lib/inquiry-mail-fields";
+import { resolveRecipients } from "@/lib/pipeline";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -56,15 +57,13 @@ export default async function InquiryDetailPage({ params }: Ctx) {
   const displayName = resolveInquiryName(item.rawPayload, item.name);
   const parts = collectInquiryFieldParts({
     rawPayload: item.rawPayload,
-    mailHiddenFieldsRaw: item.site.mailHiddenFields,
     name: displayName,
     email: item.email,
     phone: item.phone,
     message: item.message,
     pageUrl: item.pageUrl,
   });
-  const visibleFields = parts.above;
-  const hiddenConfigured = parts.belowRaw;
+  const recipients = await resolveRecipients(item.siteId, item.formId);
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -78,6 +77,8 @@ export default async function InquiryDetailPage({ params }: Ctx) {
           id={item.id}
           mode={item.status === InquiryStatus.REVIEW ? "review" : "detail"}
           forwarded={Boolean(item.sentAt)}
+          defaultToEmails={recipients.to.join(", ")}
+          defaultCcEmails={recipients.cc.join(", ")}
         />
         <dl className="grid md:grid-cols-2 gap-3 text-sm">
           <div>
@@ -87,6 +88,14 @@ export default async function InquiryDetailPage({ params }: Ctx) {
           <div>
             <dt className="text-[var(--muted)]">发信时间</dt>
             <dd>{item.sentAt ? format(item.sentAt, "yyyy-MM-dd HH:mm:ss") : "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-[var(--muted)]">第二封发信</dt>
+            <dd>
+              {item.followupSentAt
+                ? format(item.followupSentAt, "yyyy-MM-dd HH:mm:ss")
+                : "—"}
+            </dd>
           </div>
           <div>
             <dt className="text-[var(--muted)]">标记时间</dt>
@@ -108,16 +117,16 @@ export default async function InquiryDetailPage({ params }: Ctx) {
               {item.markReason?.trim() ? item.markReason : "—"}
             </dd>
           </div>
-          {visibleFields.length ? (
+          {parts.above.length ? (
             <div className="md:col-span-2">
               <dt className="text-[var(--muted)] mb-1">表单字段（邮件分割线上方）</dt>
-              <FieldTable rows={visibleFields} />
+              <FieldTable rows={parts.above} />
             </div>
           ) : null}
-          {hiddenConfigured.length ? (
+          {parts.belowRaw.length ? (
             <div className="md:col-span-2">
-              <dt className="text-[var(--muted)] mb-1">配置为隐藏的字段（邮件分割线下方）</dt>
-              <FieldTable rows={hiddenConfigured} />
+              <dt className="text-[var(--muted)] mb-1">地理位置 / 浏览路径（邮件分割线下方）</dt>
+              <FieldTable rows={parts.belowRaw} />
             </div>
           ) : null}
           {parts.attachments.length ? (

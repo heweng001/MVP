@@ -5,12 +5,7 @@ import {
   parseWpFormFields,
   type WpFormFieldRow,
 } from "./wp-fields";
-import { parseMailHiddenFields } from "./mail-hidden-config";
-import {
-  MAIL_TIPS,
-  mailContentGate,
-  type MailContentGate,
-} from "./mail-content-gate";
+import { MAIL_TIPS, mailContentGate } from "./mail-content-gate";
 import { formatUserJourneyHtml } from "./user-journey";
 
 export type MailFieldRow = {
@@ -133,22 +128,29 @@ function classifyBuiltin(f: MailFieldRow): "geo" | "journey" | "page_url" | "oth
   return "other";
 }
 
-function pushPartitioned(
+function pushGeoJourney(
   row: MailFieldRow,
-  hideIds: Set<string>,
   above: MailFieldRow[],
-  belowRaw: MailFieldRow[],
+  below: MailFieldRow[],
 ) {
-  const builtin = classifyBuiltin(row);
-  const hidden =
-    hideIds.has(row.id) ||
-    (builtin === "geo" && hideIds.has("geo")) ||
-    (builtin === "journey" && hideIds.has("journey"));
-  if (hidden) belowRaw.push(row);
+  const kind = classifyBuiltin(row);
+  if (kind === "geo" || kind === "journey") below.push(row);
   else above.push(row);
 }
 
-/** 到期站：留言类字段替换为续费提示，避免正文原文仍出现在字段列表 */
+function isEmailFieldRow(f: MailFieldRow, storedEmail: string) {
+  const n = normFieldKey(f.label);
+  if (/公司邮箱|enterpriseemail|companyemail/.test(n)) return false;
+  if (f.id === "email" || f.id === "smart-email") return true;
+  if (/^(email|e-mail|mail|邮箱|邮件|电子邮件|youremail|yourmail|buyeremail)$|邮箱|电子邮件/.test(n)) {
+    return true;
+  }
+  const email = storedEmail.trim().toLowerCase();
+  if (email && f.value.trim().toLowerCase() === email) return true;
+  return false;
+}
+
+/** 到期站：留言类字段替换为续费提示 */
 export function applyExpiredMessageGate(fields: MailFieldRow[], storedMessage: string): MailFieldRow[] {
   const msg = storedMessage.trim();
   let hit = false;
@@ -177,19 +179,16 @@ export function applyExpiredMessageGate(fields: MailFieldRow[], storedMessage: s
   return next;
 }
 
-/** 从 rawPayload 拆出上方字段 / 配置隐藏字段真值 / 附件 URL（含全部 WPForms 字段） */
+/** 固定分区：仅 geo/journey 在下方，其余非空字段在上方 */
 export function collectInquiryFieldParts(opts: {
   rawPayload: string | null | undefined;
-  mailHiddenFieldsRaw?: string | null;
   name?: string;
   email?: string;
   phone?: string;
   message?: string;
   pageUrl?: string;
 }) {
-  const hideIds = new Set(parseMailHiddenFields(opts.mailHiddenFieldsRaw));
   const pageUrl = (opts.pageUrl || "").trim();
-
   const root = parseRaw(opts.rawPayload);
   const all = parseWpFormFields(opts.rawPayload);
   const panel = extractHiddenFields(opts.rawPayload);
@@ -199,7 +198,6 @@ export function collectInquiryFieldParts(opts: {
   const belowRaw: MailFieldRow[] = [];
   const used = new Set<string>();
 
-  // 附件
   let fileIndex = 0;
   for (const f of all) {
     if (!isFileField(f)) continue;
@@ -212,26 +210,23 @@ export function collectInquiryFieldParts(opts: {
     }
   }
 
-  // 内置 geo / journey（来自板块 meta）
   const geoRow = panel.find((p) => p.id === "smart-entry_geolocation");
   const journeyRow = panel.find((p) => p.id === "smart-entry_user_journey");
   if (geoRow?.value) {
-    pushPartitioned(
+    pushGeoJourney(
       { id: "geo", label: geoRow.label, value: geoRow.value, html: geoRow.html },
-      hideIds,
       above,
       belowRaw,
     );
     used.add("geo");
     used.add(geoRow.id);
   } else if (root?.entry_geolocation) {
-    pushPartitioned(
+    pushGeoJourney(
       {
         id: "geo",
         label: "买家的地理位置",
         value: formatGeolocationZh(String(root.entry_geolocation)),
       },
-      hideIds,
       above,
       belowRaw,
     );
@@ -239,14 +234,13 @@ export function collectInquiryFieldParts(opts: {
   }
 
   if (journeyRow?.value) {
-    pushPartitioned(
+    pushGeoJourney(
       {
         id: "journey",
         label: journeyRow.label,
         value: journeyRow.value,
         html: journeyRow.html,
       },
-      hideIds,
       above,
       belowRaw,
     );
@@ -255,14 +249,13 @@ export function collectInquiryFieldParts(opts: {
   } else if (root?.user_journey != null && root.user_journey !== "") {
     const journeyHtml = formatUserJourneyHtml(root.user_journey);
     if (journeyHtml) {
-      pushPartitioned(
+      pushGeoJourney(
         {
           id: "journey",
           label: "买家浏览路径",
           value: journeyHtml,
           html: true,
         },
-        hideIds,
         above,
         belowRaw,
       );
@@ -270,28 +263,20 @@ export function collectInquiryFieldParts(opts: {
     }
   }
 
-  // 全部 WPForms 字段（含 name/email/phone/message 等）
   for (const f of all) {
     if (used.has(f.id)) continue;
     if (isFileField(f)) continue;
     if (/\{entry_(user_journey|geolocation)\}/i.test(f.value)) continue;
     if (!f.value.trim()) continue;
 
-    // 板块 geo/journey 已收录；跳过同义 Hidden/残留
     const builtinProbe = classifyBuiltin({ id: f.id, label: f.label, value: f.value });
     if (builtinProbe === "geo" && used.has("geo")) continue;
     if (builtinProbe === "journey" && used.has("journey")) continue;
 
-    // 页面链接统一为 page_url，避免与 panel / pageUrl 重复
     if (isPageUrlField(f, pageUrl) || builtinProbe === "page_url") {
       if (used.has("page_url")) continue;
-      pushPartitioned(
-        {
-          id: "page_url",
-          label: "inquiry url",
-          value: f.value.trim(),
-        },
-        hideIds,
+      pushGeoJourney(
+        { id: "page_url", label: "inquiry url", value: f.value.trim() },
         above,
         belowRaw,
       );
@@ -300,28 +285,46 @@ export function collectInquiryFieldParts(opts: {
       continue;
     }
 
-    const row: MailFieldRow = {
-      id: f.id,
-      label: f.label,
-      value: localizeCountryCodes(f.value),
-      html: /<[a-z][\s\S]*>/i.test(f.value),
-    };
-    pushPartitioned(row, hideIds, above, belowRaw);
+    if (builtinProbe === "geo" || builtinProbe === "journey") {
+      if (used.has(builtinProbe)) continue;
+      pushGeoJourney(
+        {
+          id: builtinProbe,
+          label: f.label,
+          value: localizeCountryCodes(f.value),
+          html: /<[a-z][\s\S]*>/i.test(f.value),
+        },
+        above,
+        belowRaw,
+      );
+      used.add(builtinProbe);
+      used.add(f.id);
+      continue;
+    }
+
+    pushGeoJourney(
+      {
+        id: f.id,
+        label: f.label,
+        value: localizeCountryCodes(f.value),
+        html: /<[a-z][\s\S]*>/i.test(f.value),
+      },
+      above,
+      belowRaw,
+    );
     used.add(f.id);
   }
 
-  // panel：page_url（插件/来源页）及其它非 geo/journey
   const pageFromPanel = panel.find((p) => p.id === "smart-page_url");
   if (!used.has("page_url")) {
     const pageValue = (pageFromPanel?.value || pageUrl).trim();
     if (pageValue) {
-      pushPartitioned(
+      pushGeoJourney(
         {
           id: "page_url",
           label: pageFromPanel?.label || "inquiry url",
           value: pageValue,
         },
-        hideIds,
         above,
         belowRaw,
       );
@@ -340,80 +343,83 @@ export function collectInquiryFieldParts(opts: {
       continue;
     }
     if (!p.value.trim()) continue;
-    pushPartitioned(
+    pushGeoJourney(
       { id: p.id, label: p.label, value: p.value, html: p.html },
-      hideIds,
       above,
       belowRaw,
     );
     used.add(p.id);
   }
 
-  // 无 raw 字段时的兜底：用入库列拼出可见行
-  if (above.length === 0 && belowRaw.filter((r) => r.id !== "geo" && r.id !== "journey").length === 0) {
-    const fallbacks: MailFieldRow[] = [];
+  if (above.length === 0 && belowRaw.length === 0) {
     const name = resolveInquiryName(opts.rawPayload, opts.name || "");
-    if (name) fallbacks.push({ id: "name", label: "Name", value: name });
-    if (opts.email?.trim()) fallbacks.push({ id: "email", label: "Email", value: opts.email.trim() });
+    if (name) above.push({ id: "name", label: "Name", value: name });
+    if (opts.email?.trim()) above.push({ id: "email", label: "Email", value: opts.email.trim() });
     if (opts.phone?.trim()) {
-      fallbacks.push({ id: "phone", label: "Phone/WhatsApp", value: opts.phone.trim() });
+      above.push({ id: "phone", label: "Phone/WhatsApp", value: opts.phone.trim() });
     }
     if (opts.message?.trim()) {
-      fallbacks.push({ id: "message", label: "Message", value: opts.message.trim() });
-    }
-    for (const row of fallbacks) {
-      if (used.has(row.id)) continue;
-      pushPartitioned(row, hideIds, above, belowRaw);
-      used.add(row.id);
+      above.push({ id: "message", label: "Message", value: opts.message.trim() });
     }
   }
 
-  return { above, belowRaw, attachments, hideIds: [...hideIds] };
+  return { above, belowRaw, attachments };
 }
 
-function tipForHiddenField(row: MailFieldRow, gate: MailContentGate): MailFieldRow {
-  const kind = classifyBuiltin(row);
-  if (kind === "geo") {
-    return {
-      ...row,
-      value: gate.displayUpgrade ? MAIL_TIPS.displayGeo : MAIL_TIPS.seoUnlock,
+function displayGeoJourneyTips(): MailFieldRow[] {
+  return [
+    {
+      id: "geo",
+      label: "买家的地理位置",
+      value: MAIL_TIPS.displayGeo,
       html: false,
       hint: true,
-    };
-  }
-  if (kind === "journey") {
-    return {
-      ...row,
-      value: gate.displayUpgrade ? MAIL_TIPS.displayJourney : MAIL_TIPS.seoUnlock,
+    },
+    {
+      id: "journey",
+      label: "买家浏览路径",
+      value: MAIL_TIPS.displayJourney,
       html: false,
       hint: true,
-    };
-  }
-  return {
-    ...row,
-    value: gate.displayUpgrade
-      ? "升级成SEO型网站后，可查看该字段详情。"
-      : MAIL_TIPS.seoUnlock,
-    html: false,
-    hint: true,
-  };
+    },
+  ];
 }
 
 export type InquiryMailContent = {
-  /** @deprecated 邮件正文已改为全字段列表；保留供兼容 */
   message: string;
   messageHint: boolean;
-  /** 分割线上方全部可见字段 */
   extraAbove: MailFieldRow[];
-  /** 分割线下方展示用（可能是提示） */
   below: MailFieldRow[];
+  /** 第一封：请勿回复提示 */
+  doNotReplyHint: string;
   unlockHint: string;
   attachments: MailFileAttachment[];
+  /** followup 时 replyTo 买家；mark 时不设 */
+  replyToBuyer: boolean;
+  includeMarkButtons: boolean;
 };
 
-/** 按站点门控规则生成邮件字段分区 */
+function baseOpts(opts: {
+  rawPayload: string | null | undefined;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  pageUrl: string;
+}) {
+  return {
+    rawPayload: opts.rawPayload,
+    name: opts.name,
+    email: opts.email,
+    phone: opts.phone,
+    message: opts.message,
+    pageUrl: opts.pageUrl,
+  };
+}
+
+/** 第一封：标记邮件（藏邮箱；下方仅 geo/journey） */
 export function buildInquiryMailContent(opts: {
-  site: { siteType: string; endDate: Date | string | null; mailHiddenFields?: string | null };
+  site: { siteType: string; endDate: Date | string | null };
   rawPayload: string | null | undefined;
   name: string;
   email: string;
@@ -422,69 +428,78 @@ export function buildInquiryMailContent(opts: {
   pageUrl: string;
 }): InquiryMailContent {
   const gate = mailContentGate(opts.site);
-  const parts = collectInquiryFieldParts({
-    rawPayload: opts.rawPayload,
-    mailHiddenFieldsRaw: opts.site.mailHiddenFields,
-    name: opts.name,
-    email: opts.email,
-    phone: opts.phone,
-    message: opts.message,
-    pageUrl: opts.pageUrl,
-  });
+  const parts = collectInquiryFieldParts(baseOpts(opts));
+  const aboveNoEmail = parts.above.filter((f) => !isEmailFieldRow(f, opts.email));
 
-  // 已到期：隐藏名单失效，全部进上方；留言类替换为续费提示
   if (gate.expired) {
-    const merged = applyExpiredMessageGate(
-      [...parts.above, ...parts.belowRaw],
-      opts.message,
-    );
     return {
       message: MAIL_TIPS.expiredMessage,
       messageHint: true,
-      extraAbove: merged,
-      below: [],
+      extraAbove: applyExpiredMessageGate(aboveNoEmail, opts.message),
+      below: parts.belowRaw,
+      doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
       unlockHint: "",
       attachments: parts.attachments,
+      replyToBuyer: false,
+      includeMarkButtons: true,
     };
   }
 
-  // 展示型未到期：隐藏字段仅提示，永不解锁真值
   if (gate.displayUpgrade) {
     return {
       message: opts.message,
       messageHint: false,
-      extraAbove: parts.above,
-      below: parts.belowRaw.map((r) => tipForHiddenField(r, gate)),
+      extraAbove: aboveNoEmail,
+      below: displayGeoJourneyTips(),
+      doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
       unlockHint: "",
       attachments: parts.attachments,
+      replyToBuyer: false,
+      includeMarkButtons: true,
     };
   }
 
-  // SEO 未到期：下方不放真值，统一引导提示（始终提示可标有效解锁）
-  if (gate.seoUnlock) {
-    return {
-      message: opts.message,
-      messageHint: false,
-      extraAbove: parts.above,
-      below: [],
-      unlockHint: MAIL_TIPS.seoUnlock,
-      attachments: parts.attachments,
-    };
-  }
+  // SEO 服务期内：下方 geo/journey 真值
+  return {
+    message: opts.message,
+    messageHint: false,
+    extraAbove: aboveNoEmail,
+    below: parts.belowRaw,
+    doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
+    unlockHint: "",
+    attachments: parts.attachments,
+    replyToBuyer: false,
+    includeMarkButtons: true,
+  };
+}
 
+/** 第二封：可回复买家（含邮箱；无 geo/journey；无标记按钮） */
+export function buildFollowupMailContent(opts: {
+  site: { siteType: string; endDate: Date | string | null };
+  rawPayload: string | null | undefined;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  pageUrl: string;
+}): InquiryMailContent {
+  const parts = collectInquiryFieldParts(baseOpts(opts));
   return {
     message: opts.message,
     messageHint: false,
     extraAbove: parts.above,
-    below: parts.belowRaw,
+    below: [],
+    doNotReplyHint: "",
     unlockHint: "",
     attachments: parts.attachments,
+    replyToBuyer: true,
+    includeMarkButtons: false,
   };
 }
 
-/** 反馈页应展示的字段（含到期站正文提示） */
+/** 反馈页字段 */
 export function buildFeedbackDetailFields(opts: {
-  site: { siteType: string; endDate: Date | string | null; mailHiddenFields?: string | null };
+  site: { siteType: string; endDate: Date | string | null };
   rawPayload: string | null | undefined;
   status: string;
   name: string;
@@ -492,76 +507,31 @@ export function buildFeedbackDetailFields(opts: {
   phone: string;
   message: string;
   pageUrl: string;
-}): { fields: MailFieldRow[]; messageTip: string } {
+}): { fields: MailFieldRow[]; messageTip: string; followupTip: string } {
   const gate = mailContentGate(opts.site);
-  const parts = collectInquiryFieldParts({
-    rawPayload: opts.rawPayload,
-    mailHiddenFieldsRaw: opts.site.mailHiddenFields,
-    name: opts.name,
-    email: opts.email,
-    phone: opts.phone,
-    message: opts.message,
-    pageUrl: opts.pageUrl,
-  });
+  const parts = collectInquiryFieldParts(baseOpts(opts));
+  const isValid = opts.status === "valid";
 
-  // 到期：续费提示门控留言 + 其余字段真值（含原隐藏）
   if (gate.expired) {
     return {
-      messageTip: MAIL_TIPS.expiredMessage,
+      messageTip: MAIL_TIPS.expiredRenewFeedback,
+      followupTip: "",
       fields: applyExpiredMessageGate([...parts.above, ...parts.belowRaw], opts.message),
     };
   }
 
-  // 展示型：不给隐藏真值
   if (gate.displayUpgrade) {
-    return { messageTip: "", fields: [] };
+    return {
+      messageTip: "",
+      followupTip: isValid ? MAIL_TIPS.followupSentFeedback : MAIL_TIPS.markValidToGetFollowup,
+      fields: [],
+    };
   }
 
-  // SEO：仅有效后展示隐藏真值
-  if (gate.seoUnlock && opts.status === "valid") {
-    return { messageTip: "", fields: parts.belowRaw };
-  }
-
-  return { messageTip: "", fields: [] };
-}
-
-/** 从近期询盘推断可选字段（供后台勾选；含全部 WPForms 字段） */
-export function discoverFieldOptionsFromPayloads(rawPayloads: string[]): {
-  id: string;
-  label: string;
-  builtin?: boolean;
-}[] {
-  const map = new Map<string, string>();
-  map.set("geo", "买家的地理位置（默认隐藏）");
-  map.set("journey", "买家浏览路径（默认隐藏）");
-
-  for (const raw of rawPayloads) {
-    const panel = extractHiddenFields(raw);
-    const knownPageUrl =
-      panel.find((p) => p.id === "smart-page_url")?.value.trim() || "";
-
-    for (const f of parseWpFormFields(raw)) {
-      if (!f.id || isFileField(f)) continue;
-      if (/\{entry_(user_journey|geolocation)\}/i.test(f.value)) continue;
-
-      const builtin = classifyBuiltin({ id: f.id, label: f.label, value: f.value });
-      if (builtin === "geo") continue;
-      if (builtin === "journey") continue;
-      if (builtin === "page_url" || isPageUrlField(f, knownPageUrl)) {
-        if (!map.has("page_url")) map.set("page_url", "inquiry url");
-        continue;
-      }
-      if (!map.has(f.id)) map.set(f.id, f.label || f.id);
-    }
-
-    if (knownPageUrl) {
-      if (!map.has("page_url")) map.set("page_url", "inquiry url");
-    }
-  }
-
-  return [...map.entries()].map(([id, label]) => ({
-    id,
-    label,
-    builtin: id === "geo" || id === "journey",
-  }));
+  // SEO 服务期内：反馈页不重复铺 geo（已在第一封）；有效后提示第二封
+  return {
+    messageTip: "",
+    followupTip: isValid ? MAIL_TIPS.followupSentFeedback : MAIL_TIPS.markValidToGetFollowup,
+    fields: [],
+  };
 }

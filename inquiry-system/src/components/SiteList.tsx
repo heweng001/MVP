@@ -17,7 +17,6 @@ export type SiteRow = {
   siteKey: string;
   productKeywords: string;
   spamExtraWords: string;
-  mailHiddenFields: string[];
   wpAdminUrl: string;
   wpUsername: string;
   hasWpCredentials: boolean;
@@ -918,7 +917,6 @@ export function SiteList({
           siteKey={configLive.siteKey}
           ingestUrl={ingestUrl}
           forms={configLive.forms}
-          mailHiddenFields={configLive.mailHiddenFields}
           onClose={() => setConfigSite(null)}
         />
       ) : null}

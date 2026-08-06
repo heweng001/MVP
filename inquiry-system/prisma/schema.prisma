@@ -136,6 +136,8 @@ model Inquiry {
   submittedAt     DateTime  @default(now())
   reviewEnteredAt DateTime?
   sentAt          DateTime?
+  /// 标记有效后发出的「可回复买家」第二封邮件时间
+  followupSentAt  DateTime?
   markedAt        DateTime?
   /// 客户标记时选填的反馈原因
   markReason      String    @default("")

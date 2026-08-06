@@ -22,6 +22,8 @@ export function MarkConfirm({
   showUnlockedDetails,
   unlockedFields = [],
   messageTip = "",
+  followupTip = "",
+  followupError = "",
   initialMarkReason = "",
   justApplied,
   applyError,
@@ -37,10 +39,10 @@ export function MarkConfirm({
   unlockAvailable?: boolean;
   showUnlockedDetails: boolean;
   unlockedFields?: MarkDetailField[];
-  /** 到期站：正文仅显示提示 */
   messageTip?: string;
+  followupTip?: string;
+  followupError?: string;
   initialMarkReason?: string;
-  /** 本次从邮件链接一键完成了标记 */
   justApplied?: boolean;
   applyError?: string;
 }) {
@@ -53,6 +55,8 @@ export function MarkConfirm({
   const [detailsVisible, setDetailsVisible] = useState(showUnlockedDetails);
   const [detailFields, setDetailFields] = useState(unlockedFields);
   const [bodyTip, setBodyTip] = useState(messageTip);
+  const [followTip, setFollowTip] = useState(followupTip);
+  const [followErr, setFollowErr] = useState(followupError);
 
   const marked = status === "valid" || status === "invalid";
 
@@ -90,6 +94,12 @@ export function MarkConfirm({
     }
     if (typeof data.messageTip === "string") {
       setBodyTip(data.messageTip);
+    }
+    if (typeof data.followupTip === "string") {
+      setFollowTip(data.followupTip);
+    }
+    if (typeof data.followupError === "string" && data.followupError) {
+      setFollowErr(data.followupError);
     }
     setOkMsg(action === "valid" ? "已标记为有效" : "已标记为无效");
   }
@@ -144,14 +154,20 @@ export function MarkConfirm({
           {status === "valid" ? (
             <p className="text-sm text-[var(--muted)] mt-2">已标记为有效的询盘不可再改为无效。</p>
           ) : null}
+          {followTip ? (
+            <p className="text-sm text-[var(--brand)] mt-3 leading-relaxed bg-teal-50 border border-teal-100 rounded-md px-3 py-2">
+              {followTip}
+            </p>
+          ) : null}
+          {followErr ? (
+            <p className="text-sm text-[var(--danger)] mt-2">第二封邮件发送失败：{followErr}</p>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-1">
           <p className="text-sm text-[var(--ink)]">请选择标记结果（点击后立即生效）：</p>
-          {unlockAvailable ? (
-            <p className="text-xs text-[var(--muted)]">
-              标记为「有效」后，即可在本页查看地理位置、用户浏览路径及其他隐藏字段详情。
-            </p>
+          {unlockAvailable && followTip ? (
+            <p className="text-xs text-[var(--muted)] leading-relaxed">{followTip}</p>
           ) : null}
           {invalidBlockedReason ? (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2">

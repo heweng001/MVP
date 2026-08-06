@@ -4,10 +4,6 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
-import {
-  parseMailHiddenFields,
-  serializeMailHiddenFields,
-} from "@/lib/mail-hidden-config";
 import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
 export async function GET(req: NextRequest) {
@@ -69,14 +65,6 @@ export async function POST(req: NextRequest) {
       siteKey: String(body.siteKey || randomBytes(16).toString("hex")),
       productKeywords: String(body.productKeywords || ""),
       spamExtraWords: String(body.spamExtraWords || ""),
-      mailHiddenFields:
-        body.mailHiddenFields !== undefined
-          ? serializeMailHiddenFields(
-              Array.isArray(body.mailHiddenFields)
-                ? body.mailHiddenFields.map(String)
-                : parseMailHiddenFields(String(body.mailHiddenFields || "")),
-            )
-          : serializeMailHiddenFields([]),
       wpAdminUrl: String(body.wpAdminUrl || "").trim(),
       wpUsername: String(body.wpUsername || "").trim(),
       wpPasswordEnc: body.wpPassword

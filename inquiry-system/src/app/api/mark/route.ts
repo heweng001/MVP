@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const caps = getMarkCapabilities(result.inquiry);
   const detail = caps.showUnlockedDetails
     ? unlockedDetailFields(result.inquiry)
-    : { fields: [], messageTip: "" };
+    : { fields: [], messageTip: "", followupTip: caps.followupTip };
   return NextResponse.json({
     ok: true,
     status: result.inquiry.status,
@@ -51,5 +51,7 @@ export async function POST(req: NextRequest) {
     showUnlockedDetails: caps.showUnlockedDetails,
     unlockedFields: detail.fields,
     messageTip: detail.messageTip,
+    followupTip: detail.followupTip || caps.followupTip,
+    followupError: "followupError" in result ? result.followupError || "" : "",
   });
 }

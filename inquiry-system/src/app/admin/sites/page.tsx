@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { SiteList } from "@/components/SiteList";
 import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
-import { parseMailHiddenFields } from "@/lib/mail-hidden-config";
 import { hasWpRemoteCreds } from "@/lib/site-credentials";
 import { readPluginVersion } from "@/lib/plugin-meta";
 import {
@@ -102,7 +101,6 @@ export default async function SitesPage({
     siteKey: s.siteKey,
     productKeywords: s.productKeywords,
     spamExtraWords: s.spamExtraWords,
-    mailHiddenFields: parseMailHiddenFields(s.mailHiddenFields),
     wpAdminUrl: s.wpAdminUrl,
     wpUsername: s.wpUsername,
     hasWpCredentials: hasWpRemoteCreds(s),

@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { InquiryStatus } from "@/lib/constants";
-import { sendInquiryById } from "@/lib/pipeline";
+import {
+  sendInquiryById,
+  sendInquiryFollowupById,
+} from "@/lib/pipeline";
+import { parseEmails } from "@/lib/email";
+import { maybeSendFollowupAfterAdminValid } from "@/lib/mark";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -21,8 +26,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (inquiry.status !== InquiryStatus.REVIEW) {
       return NextResponse.json({ error: "Not in review" }, { status: 400 });
     }
-    const updated = await sendInquiryById(id);
-    return NextResponse.json({ ok: true, inquiry: updated });
+    try {
+      const updated = await sendInquiryById(id);
+      return NextResponse.json({ ok: true, inquiry: updated });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : String(e) },
+        { status: 400 },
+      );
+    }
   }
 
   if (action === "reject_review") {
@@ -40,13 +52,31 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   if (action === "resend") {
-    const updated = await sendInquiryById(id);
-    return NextResponse.json({ ok: true, inquiry: updated });
+    const phase = body.phase === "followup" ? "followup" : "mark";
+    const toParsed = body.toEmails !== undefined ? parseEmails(String(body.toEmails), "") : null;
+    const ccParsed =
+      body.ccEmails !== undefined ? parseEmails("", String(body.ccEmails || "")) : null;
+    const opts = {
+      to: toParsed?.to,
+      cc: ccParsed ? ccParsed.cc : undefined,
+      force: phase === "followup",
+    };
+    try {
+      const updated =
+        phase === "followup"
+          ? await sendInquiryFollowupById(id, opts)
+          : await sendInquiryById(id, opts);
+      return NextResponse.json({ ok: true, inquiry: updated });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : String(e) },
+        { status: 400 },
+      );
+    }
   }
 
   if (action === "set_status") {
     let status = String(body.status || "");
-    // 管理员手动标垃圾 → 审核垃圾（与系统自动垃圾区分）
     if (status === InquiryStatus.AUTO_SPAM) {
       status = InquiryStatus.REVIEW_SPAM;
     }
@@ -54,7 +84,6 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (!allowed.includes(status as (typeof allowed)[number])) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
-    // 已转发不可回撤为垃圾（避免把已发客户的询盘改回未发送垃圾）
     if (
       (status === InquiryStatus.REVIEW_SPAM || status === InquiryStatus.AUTO_SPAM) &&
       inquiry.sentAt
@@ -64,6 +93,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         { status: 400 },
       );
     }
+    if (
+      status === InquiryStatus.INVALID &&
+      inquiry.status === InquiryStatus.VALID
+    ) {
+      return NextResponse.json(
+        { error: "已标记为有效的询盘不可再改为无效。" },
+        { status: 400 },
+      );
+    }
+    const wasValid = inquiry.status === InquiryStatus.VALID;
     const updated = await prisma.inquiry.update({
       where: { id },
       data: {
@@ -74,6 +113,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
             : inquiry.markedAt,
       },
     });
+    if (status === InquiryStatus.VALID && !wasValid) {
+      await maybeSendFollowupAfterAdminValid(id);
+    }
     return NextResponse.json({ ok: true, inquiry: updated });
   }
 

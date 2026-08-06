@@ -1,26 +1,26 @@
 import { prisma } from "./prisma";
 import { InquiryStatus, isSpamStatus, markHours } from "./constants";
-import { mailContentGate } from "./mail-content-gate";
+import { mailContentGate, MAIL_TIPS } from "./mail-content-gate";
 import { buildFeedbackDetailFields } from "./inquiry-mail-fields";
+import { sendInquiryFollowupById } from "./pipeline";
 
 export type MarkAction = "valid" | "invalid";
 
 export const INVALID_MARK_EXPIRED_TIP =
-  "发信已超过 72 小时，无法再标记为无效。你仍可将询盘标记为有效，以便在反馈页查看完整详情。";
+  "发信已超过 72 小时，无法再标记为无效。你仍可将询盘标记为有效；标记有效后系统将发送含买家邮箱的第二封邮件。";
 
 export type MarkCapabilities = {
-  /** 已发送给客户，可进入反馈页交互 */
   canInteract: boolean;
   reason: string;
   canMarkValid: boolean;
   canMarkInvalid: boolean;
   canEditReason: boolean;
-  /** 超过 72 小时导致不可标无效时的提示 */
   invalidBlockedReason: string;
-  /** SEO 未到期：标记有效后可看详细信息 */
+  /** 服务期内：引导标有效以收第二封 */
   unlockAvailable: boolean;
-  /** SEO 未到期且已标有效：展示隐藏字段真值；或到期站展示明文（正文除外） */
+  /** 到期站：展示字段区 + 续费提示 */
   showUnlockedDetails: boolean;
+  followupTip: string;
 };
 
 export async function getInquiryByToken(token: string) {
@@ -30,7 +30,6 @@ export async function getInquiryByToken(token: string) {
   });
 }
 
-/** 发信后是否已超过可标「无效」的时限 */
 export function isInvalidMarkExpired(sentAt: Date | null, now = new Date()) {
   if (!sentAt) return false;
   const deadline = sentAt.getTime() + markHours() * 60 * 60 * 1000;
@@ -52,6 +51,7 @@ export function getMarkCapabilities(inquiry: {
       invalidBlockedReason: "",
       unlockAvailable: false,
       showUnlockedDetails: false,
+      followupTip: "",
     };
   }
 
@@ -65,6 +65,7 @@ export function getMarkCapabilities(inquiry: {
       invalidBlockedReason: "",
       unlockAvailable: false,
       showUnlockedDetails: false,
+      followupTip: "",
     };
   }
 
@@ -76,6 +77,12 @@ export function getMarkCapabilities(inquiry: {
     inquiry.status === InquiryStatus.TIMEOUT_UNMARKED;
   const invalidExpired = isInvalidMarkExpired(inquiry.sentAt);
 
+  let followupTip = "";
+  if (!gate.expired) {
+    if (isValid) followupTip = MAIL_TIPS.followupSentFeedback;
+    else if (unmarked || isInvalid) followupTip = MAIL_TIPS.markValidToGetFollowup;
+  }
+
   return {
     canInteract: true,
     reason: "",
@@ -84,10 +91,9 @@ export function getMarkCapabilities(inquiry: {
     canEditReason: isInvalid,
     invalidBlockedReason:
       unmarked && invalidExpired ? INVALID_MARK_EXPIRED_TIP : "",
-    // 仅 SEO 未到期提供「标有效解锁」
-    unlockAvailable: gate.seoUnlock,
-    // SEO 有效后解锁；到期站始终可看字段区（正文另用提示）
-    showUnlockedDetails: gate.expired || (isValid && gate.seoUnlock),
+    unlockAvailable: !gate.expired && (unmarked || isInvalid),
+    showUnlockedDetails: gate.expired,
+    followupTip,
   };
 }
 
@@ -118,6 +124,7 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
     if (!caps.canMarkValid) {
       return { ok: false as const, error: "当前状态不可标记为有效。" };
     }
+    const wasAlreadyValid = inquiry.status === InquiryStatus.VALID;
     const updated = await prisma.inquiry.update({
       where: { id: inquiry.id },
       data: {
@@ -127,7 +134,24 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
       },
       include: { site: true },
     });
-    return { ok: true as const, inquiry: updated };
+
+    let followupError = "";
+    const gate = mailContentGate(updated.site);
+    if (!wasAlreadyValid && !gate.expired) {
+      try {
+        await sendInquiryFollowupById(updated.id);
+      } catch (e) {
+        console.error("[mark] followup send failed", updated.id, e);
+        followupError = e instanceof Error ? e.message : String(e);
+      }
+    }
+
+    const fresh = await getInquiryByToken(token);
+    return {
+      ok: true as const,
+      inquiry: fresh ?? updated,
+      followupError,
+    };
   }
 
   if (inquiry.status === InquiryStatus.VALID) {
@@ -158,7 +182,6 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
   return { ok: true as const, inquiry: updated };
 }
 
-/** 仅更新反馈原因（仅无效询盘） */
 export async function saveMarkReason(token: string, reason: string) {
   const inquiry = await getInquiryByToken(token);
   if (!inquiry) return { ok: false as const, error: "无效链接" };
@@ -181,18 +204,16 @@ export async function saveMarkReason(token: string, reason: string) {
   return { ok: true as const, inquiry: updated };
 }
 
-export function unlockedDetailFields(
-  inquiry: {
-    rawPayload: string;
-    status: string;
-    name: string;
-    email: string;
-    phone: string;
-    message: string;
-    pageUrl: string;
-    site: { siteType: string; endDate: Date | string | null; mailHiddenFields?: string | null };
-  },
-) {
+export function unlockedDetailFields(inquiry: {
+  rawPayload: string;
+  status: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  pageUrl: string;
+  site: { siteType: string; endDate: Date | string | null };
+}) {
   return buildFeedbackDetailFields({
     site: inquiry.site,
     rawPayload: inquiry.rawPayload,
@@ -203,4 +224,20 @@ export function unlockedDetailFields(
     message: inquiry.message,
     pageUrl: inquiry.pageUrl,
   });
+}
+
+/** 管理员将状态改为有效时触发第二封（服务期内） */
+export async function maybeSendFollowupAfterAdminValid(inquiryId: string) {
+  const inquiry = await prisma.inquiry.findUnique({
+    where: { id: inquiryId },
+    include: { site: true },
+  });
+  if (!inquiry) return;
+  const gate = mailContentGate(inquiry.site);
+  if (gate.expired) return;
+  try {
+    await sendInquiryFollowupById(inquiryId);
+  } catch (e) {
+    console.error("[admin] followup send failed", inquiryId, e);
+  }
 }

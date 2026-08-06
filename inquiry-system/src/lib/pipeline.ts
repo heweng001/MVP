@@ -4,7 +4,12 @@ import { InquiryStatus } from "./constants";
 import { scoreSpam } from "./spam";
 import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
-import { buildInquiryMailContent, resolveInquiryName } from "./inquiry-mail-fields";
+import {
+  buildFollowupMailContent,
+  buildInquiryMailContent,
+  resolveInquiryName,
+} from "./inquiry-mail-fields";
+import { mailContentGate } from "./mail-content-gate";
 
 export type IngestBody = {
   site_key: string;
@@ -17,10 +22,8 @@ export type IngestBody = {
   message?: string;
   page_url?: string;
   fields?: Record<string, unknown>;
-  /** 插件从 WPForms User Journey 板块抓取并格式化后的 HTML */
   entry_user_journey?: string;
   user_journey?: unknown;
-  /** 插件从 WPForms Location / Geolocation 板块抓取 */
   entry_geolocation?: string;
   location?: unknown;
 };
@@ -46,7 +49,7 @@ async function isBlacklisted(siteId: string, email: string, message: string) {
   return false;
 }
 
-async function resolveRecipients(siteId: string, formId: string) {
+export async function resolveRecipients(siteId: string, formId: string) {
   const cfg = await prisma.formMailConfig.findUnique({
     where: { siteId_formId: { siteId, formId } },
   });
@@ -60,25 +63,57 @@ async function resolveRecipients(siteId: string, formId: string) {
   return { to: [] as string[], cc: [] as string[] };
 }
 
-export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boolean; autoSentReview?: boolean }) {
-  const inquiry = await prisma.inquiry.findUnique({
-    where: { id: inquiryId },
-    include: { site: true },
-  });
-  if (!inquiry) throw new Error("Inquiry not found");
+export type SendInquiryOpts = {
+  degraded?: boolean;
+  autoSentReview?: boolean;
+  /** 补发时自定义收件人 */
+  to?: string[];
+  cc?: string[];
+  /** 审核通过等场景：设为 pending；普通补发不改状态 */
+  setPending?: boolean;
+  /** 强制重发第二封（忽略 followupSentAt） */
+  force?: boolean;
+};
 
-  const recipients = await resolveRecipients(inquiry.siteId, inquiry.formId);
+async function buildSendPayload(
+  inquiry: {
+    markToken: string;
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+    pageUrl: string;
+    formId: string;
+    entryId: string;
+    rawPayload: string;
+    site: { domain: string; siteType: string; endDate: Date | string | null };
+  },
+  phase: "mark" | "followup",
+  recipients: { to: string[]; cc: string[] },
+) {
   const displayName = resolveInquiryName(inquiry.rawPayload, inquiry.name);
-  const content = buildInquiryMailContent({
-    site: inquiry.site,
-    rawPayload: inquiry.rawPayload,
-    name: displayName,
-    email: inquiry.email,
-    phone: inquiry.phone,
-    message: inquiry.message,
-    pageUrl: inquiry.pageUrl,
-  });
-  const sent = await sendInquiryEmail({
+  const content =
+    phase === "followup"
+      ? buildFollowupMailContent({
+          site: inquiry.site,
+          rawPayload: inquiry.rawPayload,
+          name: displayName,
+          email: inquiry.email,
+          phone: inquiry.phone,
+          message: inquiry.message,
+          pageUrl: inquiry.pageUrl,
+        })
+      : buildInquiryMailContent({
+          site: inquiry.site,
+          rawPayload: inquiry.rawPayload,
+          name: displayName,
+          email: inquiry.email,
+          phone: inquiry.phone,
+          message: inquiry.message,
+          pageUrl: inquiry.pageUrl,
+        });
+
+  return {
     to: recipients.to,
     cc: recipients.cc,
     siteName: inquiry.site.domain,
@@ -89,6 +124,7 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     phone: inquiry.phone,
     message: content.message,
     messageHint: content.messageHint,
+    doNotReplyHint: content.doNotReplyHint,
     unlockHint: content.unlockHint,
     pageUrl: inquiry.pageUrl,
     formId: inquiry.formId,
@@ -96,19 +132,83 @@ export async function sendInquiryById(inquiryId: string, opts?: { degraded?: boo
     extraFields: content.extraAbove,
     belowFields: content.below,
     fileAttachments: content.attachments,
+    replyToBuyer: content.replyToBuyer,
+    includeMarkButtons: content.includeMarkButtons,
+    phase,
+  };
+}
+
+/** 第一封：标记邮件 */
+export async function sendInquiryById(inquiryId: string, opts?: SendInquiryOpts) {
+  const inquiry = await prisma.inquiry.findUnique({
+    where: { id: inquiryId },
+    include: { site: true },
   });
+  if (!inquiry) throw new Error("Inquiry not found");
+
+  const defaults = await resolveRecipients(inquiry.siteId, inquiry.formId);
+  const recipients = {
+    to: opts?.to?.length ? opts.to : defaults.to,
+    cc: opts?.cc !== undefined ? opts.cc : defaults.cc,
+  };
+
+  const payload = await buildSendPayload(inquiry, "mark", recipients);
+  const sent = await sendInquiryEmail(payload);
+  if (sent.skipped) {
+    throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");
+  }
+
+  const data: {
+    sentAt: Date;
+    degraded?: boolean;
+    autoSentReview?: boolean;
+    status?: string;
+  } = {
+    sentAt: new Date(),
+    degraded: opts?.degraded ?? inquiry.degraded,
+    autoSentReview: opts?.autoSentReview ?? inquiry.autoSentReview,
+  };
+  if (opts?.setPending || inquiry.status === InquiryStatus.REVIEW) {
+    data.status = InquiryStatus.PENDING;
+  }
+
+  return prisma.inquiry.update({
+    where: { id: inquiryId },
+    data,
+  });
+}
+
+/** 第二封：可回复买家（服务期内；幂等除非 force） */
+export async function sendInquiryFollowupById(inquiryId: string, opts?: SendInquiryOpts) {
+  const inquiry = await prisma.inquiry.findUnique({
+    where: { id: inquiryId },
+    include: { site: true },
+  });
+  if (!inquiry) throw new Error("Inquiry not found");
+
+  const gate = mailContentGate(inquiry.site);
+  if (gate.expired) {
+    throw new Error("网站已到期，不发送含买家邮箱的第二封邮件");
+  }
+  if (inquiry.followupSentAt && !opts?.force) {
+    return inquiry;
+  }
+
+  const defaults = await resolveRecipients(inquiry.siteId, inquiry.formId);
+  const recipients = {
+    to: opts?.to?.length ? opts.to : defaults.to,
+    cc: opts?.cc !== undefined ? opts.cc : defaults.cc,
+  };
+
+  const payload = await buildSendPayload(inquiry, "followup", recipients);
+  const sent = await sendInquiryEmail(payload);
   if (sent.skipped) {
     throw new Error("SMTP 未配置，无法发信（请在后台「发件设置」填写）");
   }
 
   return prisma.inquiry.update({
     where: { id: inquiryId },
-    data: {
-      status: InquiryStatus.PENDING,
-      sentAt: new Date(),
-      degraded: opts?.degraded ?? inquiry.degraded,
-      autoSentReview: opts?.autoSentReview ?? inquiry.autoSentReview,
-    },
+    data: { followupSentAt: new Date() },
   });
 }
 

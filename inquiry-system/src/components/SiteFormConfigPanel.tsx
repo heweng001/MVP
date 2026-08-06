@@ -1,10 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CopyField } from "./CopyField";
 import { PluginDownloadCard } from "./PluginDownloadCard";
-import { DEFAULT_MAIL_HIDDEN_FIELDS } from "@/lib/mail-hidden-config";
 
 type FormCfg = {
   id: string;
@@ -14,8 +13,6 @@ type FormCfg = {
   ccEmails: string;
   enabled: boolean;
 };
-
-type FieldOpt = { id: string; label: string; builtin?: boolean };
 
 function Step({
   n,
@@ -45,7 +42,6 @@ export function SiteFormConfigPanel({
   siteKey,
   ingestUrl,
   forms,
-  mailHiddenFields = DEFAULT_MAIL_HIDDEN_FIELDS,
   onClose,
 }: {
   siteId: string;
@@ -53,36 +49,10 @@ export function SiteFormConfigPanel({
   siteKey: string;
   ingestUrl: string;
   forms: FormCfg[];
-  mailHiddenFields?: string[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [hiddenIds, setHiddenIds] = useState<string[]>(mailHiddenFields);
-  const [fieldOptions, setFieldOptions] = useState<FieldOpt[]>([]);
-  const [hiddenMsg, setHiddenMsg] = useState("");
-
-  useEffect(() => {
-    setHiddenIds(mailHiddenFields);
-  }, [mailHiddenFields]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(`/api/admin/sites/${siteId}`);
-      const data = await res.json().catch(() => ({}));
-      if (cancelled || !res.ok) return;
-      if (Array.isArray(data.site?.mailHiddenFields)) {
-        setHiddenIds(data.site.mailHiddenFields);
-      }
-      if (Array.isArray(data.fieldOptions)) {
-        setFieldOptions(data.fieldOptions);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [siteId]);
 
   async function saveForm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -104,45 +74,6 @@ export function SiteFormConfigPanel({
     form.reset();
     router.refresh();
   }
-
-  function toggleHidden(id: string) {
-    setHiddenIds((prev) => {
-      if (id === "geo" || id === "journey") {
-        // 内置默认项不可取消
-        return prev.includes(id) ? prev : [...prev, id];
-      }
-      return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-    });
-  }
-
-  async function saveHiddenFields() {
-    setBusy(true);
-    setHiddenMsg("");
-    const res = await fetch(`/api/admin/sites/${siteId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mailHiddenFields: hiddenIds }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setHiddenMsg(data.error || "保存失败");
-      return;
-    }
-    if (Array.isArray(data.site?.mailHiddenFields)) {
-      setHiddenIds(data.site.mailHiddenFields);
-    }
-    setHiddenMsg("已保存邮件隐藏字段");
-    router.refresh();
-  }
-
-  const options: FieldOpt[] =
-    fieldOptions.length > 0
-      ? fieldOptions
-      : [
-          { id: "geo", label: "买家的地理位置（默认隐藏）", builtin: true },
-          { id: "journey", label: "买家浏览路径（默认隐藏）", builtin: true },
-        ];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -246,57 +177,13 @@ export function SiteFormConfigPanel({
           </form>
         </Step>
 
-        <Step n={4} title="邮件隐藏字段（可选）">
-          <p className="text-xs text-[var(--muted)]">
-            勾选的字段放在邮件分割线下方：SEO
-            站需客户标「有效」后才在反馈页可见真值；展示型站即使标有效也不显示真值。未勾选且非空的字段显示在分割线上方。可勾选全部表单字段（含
-            Name / Email / Phone / Message 等）；地理位置与浏览路径默认隐藏且不可取消。
-          </p>
-          <div className="space-y-1.5 max-h-56 overflow-y-auto border border-[var(--line)] rounded-lg p-2">
-            {options.map((opt) => {
-              const checked = hiddenIds.includes(opt.id);
-              const locked = opt.id === "geo" || opt.id === "journey";
-              return (
-                <label
-                  key={opt.id}
-                  className={`flex items-start gap-2 text-xs ${locked ? "opacity-90" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={checked}
-                    disabled={locked || busy}
-                    onChange={() => toggleHidden(opt.id)}
-                  />
-                  <span>
-                    <span className="font-medium">{opt.label}</span>
-                    <span className="text-[var(--muted)] ml-1">({opt.id})</span>
-                    {locked ? (
-                      <span className="text-[var(--muted)] ml-1">· 默认</span>
-                    ) : null}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-[var(--muted)]">
-            列表来自该站最近询盘字段；尚无询盘时仅显示默认两项。保存后对新发出的邮件生效。
-          </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => saveHiddenFields()}
-            className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            保存隐藏字段
-          </button>
-          {hiddenMsg ? <p className="text-xs text-[var(--muted)]">{hiddenMsg}</p> : null}
-        </Step>
-
-        <Step n={5} title="保留 WPForms 原生通知（降级备用）">
+        <Step n={4} title="保留 WPForms 原生通知（降级备用）">
           <p className="text-xs text-[var(--muted)]">
             请<strong>保留</strong> WPForms 该表单的通知收件人。插件推送成功时会阻止本次原生发信；推送失败时仍由
             WPForms 发信，避免丢单。
+          </p>
+          <p className="text-xs text-[var(--muted)]">
+            邮件规则：第一封为标记邮件（不含买家邮箱）；客户标「有效」后，服务期内系统会立刻再发一封含买家邮箱的邮件供回复。分割线下方仅展示地理位置与浏览路径（展示型站点为升级提示）。
           </p>
           <p className="text-xs text-[var(--muted)]">
             配置完成后，在站点前台提交一封测试询盘：本系统「询盘列表」应出现记录，步骤 3

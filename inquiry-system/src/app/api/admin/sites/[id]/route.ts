@@ -3,24 +3,17 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
-import {
-  parseMailHiddenFields,
-  serializeMailHiddenFields,
-} from "@/lib/mail-hidden-config";
-import { discoverFieldOptionsFromPayloads } from "@/lib/inquiry-mail-fields";
 import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 function publicSite(site: {
   wpPasswordEnc: string;
-  mailHiddenFields: string;
   [key: string]: unknown;
 }) {
   const { wpPasswordEnc: _enc, ...rest } = site;
   return {
     ...rest,
-    mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
     hasWpCredentials: hasWpRemoteCreds(site),
     hasWpPassword: Boolean(String(site.wpPasswordEnc || "").trim()),
   };
@@ -36,17 +29,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   });
   if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const recent = await prisma.inquiry.findMany({
-    where: { siteId: id },
-    orderBy: { submittedAt: "desc" },
-    take: 30,
-    select: { rawPayload: true },
-  });
-  const fieldOptions = discoverFieldOptionsFromPayloads(recent.map((r) => r.rawPayload));
-
   return NextResponse.json({
     site: publicSite(site),
-    fieldOptions,
   });
 }
 
@@ -75,14 +59,6 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         body.productKeywords !== undefined ? String(body.productKeywords) : undefined,
       spamExtraWords:
         body.spamExtraWords !== undefined ? String(body.spamExtraWords) : undefined,
-      mailHiddenFields:
-        body.mailHiddenFields !== undefined
-          ? serializeMailHiddenFields(
-              Array.isArray(body.mailHiddenFields)
-                ? body.mailHiddenFields.map(String)
-                : parseMailHiddenFields(String(body.mailHiddenFields || "")),
-            )
-          : undefined,
       wpAdminUrl:
         body.wpAdminUrl !== undefined ? String(body.wpAdminUrl).trim() : undefined,
       wpUsername:
