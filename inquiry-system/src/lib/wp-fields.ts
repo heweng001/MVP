@@ -171,7 +171,7 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
 
   const out: WpFormFieldRow[] = [];
   if (pageUrl) {
-    out.push({ id: "smart-page_url", label: "买家发询盘页面", value: pageUrl, type: "hidden" });
+    out.push({ id: "smart-page_url", label: "inquiry url", value: pageUrl, type: "hidden" });
   }
   if (geoFromMeta) {
     out.push({

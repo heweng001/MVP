@@ -162,7 +162,7 @@ export function MarkConfirm({
       )}
 
       {detailsVisible && (bodyTip || detailFields.length > 0) ? (
-        <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden">
+        <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden -mx-0">
           <div className="px-3 py-2 text-sm font-medium bg-black/[0.02] border-b border-[var(--line)]">
             询盘详细信息
           </div>
@@ -180,7 +180,7 @@ export function MarkConfirm({
                 <div className="text-[11px] text-[var(--muted)] mb-1">{f.label}</div>
                 {f.html ? (
                   <div
-                    className="text-[13px] leading-relaxed overflow-x-auto [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-1.5 [&_td]:py-1"
+                    className="text-[13px] leading-relaxed overflow-x-auto -mx-1 px-1 [&_table]:min-w-[28rem] sm:[&_table]:min-w-0 [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-[var(--line)] [&_td]:px-1.5 [&_td]:py-1"
                     dangerouslySetInnerHTML={{ __html: sanitizeJourneyHtml(f.value) }}
                   />
                 ) : isHttpUrl(f.value) ? (
@@ -193,7 +193,7 @@ export function MarkConfirm({
                     {f.value.trim()}
                   </a>
                 ) : (
-                  <div className="whitespace-pre-wrap text-[13px] leading-relaxed">{f.value}</div>
+                  <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">{f.value}</div>
                 )}
               </div>
             ))}
@@ -224,7 +224,7 @@ export function MarkConfirm({
       {okMsg ? <p className="text-sm text-[var(--brand)]">{okMsg}</p> : null}
 
       {canInteract ? (
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        <div className="flex flex-wrap items-stretch sm:items-center gap-2 pt-0.5 [&_button]:flex-1 sm:[&_button]:flex-none [&_button]:min-h-11 sm:[&_button]:min-h-0">
           {marked ? (
             <>
               {status === "invalid" ? (

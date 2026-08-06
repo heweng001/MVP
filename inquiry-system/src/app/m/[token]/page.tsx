@@ -45,10 +45,10 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
     : { fields: [], messageTip: "" };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
-      <div className="w-full max-w-lg bg-[var(--panel)] border border-[var(--line)] rounded-lg p-7 shadow-sm">
-        <h1 className="text-xl font-semibold tracking-tight mb-1">询盘质量反馈</h1>
-        <p className="text-[13px] text-[var(--muted)] mb-5">
+    <main className="min-h-screen flex flex-col items-center justify-center px-3 py-4 sm:px-6 sm:py-8 bg-[var(--bg)]">
+      <div className="w-full max-w-3xl sm:max-w-4xl bg-[var(--panel)] border border-[var(--line)] rounded-xl sm:rounded-2xl p-4 sm:p-7 shadow-sm">
+        <h1 className="text-lg sm:text-xl font-semibold tracking-tight mb-1">询盘质量反馈</h1>
+        <p className="text-[13px] text-[var(--muted)] mb-4 sm:mb-5 break-words">
           {inquiry.site.domain}
           {inquiry.name || inquiry.email
             ? ` · ${inquiry.name || "—"}${inquiry.email ? ` / ${inquiry.email}` : ""}`
@@ -72,7 +72,7 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
           applyError={applyError}
         />
       </div>
-      <p className="mt-6 text-[11px] text-[var(--muted)]">
+      <p className="mt-4 sm:mt-6 text-[11px] text-[var(--muted)] text-center px-3">
         © {new Date().getFullYear()} 福建贸牛科技股份有限公司 保留所有权利
       </p>
     </main>

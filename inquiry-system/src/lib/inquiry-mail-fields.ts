@@ -288,7 +288,7 @@ export function collectInquiryFieldParts(opts: {
       pushPartitioned(
         {
           id: "page_url",
-          label: "买家发询盘页面",
+          label: "inquiry url",
           value: f.value.trim(),
         },
         hideIds,
@@ -318,7 +318,7 @@ export function collectInquiryFieldParts(opts: {
       pushPartitioned(
         {
           id: "page_url",
-          label: pageFromPanel?.label || "买家发询盘页面",
+          label: pageFromPanel?.label || "inquiry url",
           value: pageValue,
         },
         hideIds,
@@ -548,14 +548,14 @@ export function discoverFieldOptionsFromPayloads(rawPayloads: string[]): {
       if (builtin === "geo") continue;
       if (builtin === "journey") continue;
       if (builtin === "page_url" || isPageUrlField(f, knownPageUrl)) {
-        if (!map.has("page_url")) map.set("page_url", "买家发询盘页面");
+        if (!map.has("page_url")) map.set("page_url", "inquiry url");
         continue;
       }
       if (!map.has(f.id)) map.set(f.id, f.label || f.id);
     }
 
     if (knownPageUrl) {
-      if (!map.has("page_url")) map.set("page_url", "买家发询盘页面");
+      if (!map.has("page_url")) map.set("page_url", "inquiry url");
     }
   }
 
