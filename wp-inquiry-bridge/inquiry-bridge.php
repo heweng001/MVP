@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.11
+ * Version: 1.0.13
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,11 +14,13 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
+    const VERSION = '1.0.13';
 
     public static function init()
     {
         add_action('admin_menu', [__CLASS__, 'admin_menu']);
         add_action('admin_init', [__CLASS__, 'register_settings']);
+        add_action('rest_api_init', [__CLASS__, 'register_rest_routes']);
 
         // Ensure notifications run in the same request so we can suppress after ingest.
         add_filter('wpforms_tasks_entry_emails_trigger_send_same_process', '__return_true');
@@ -27,6 +29,145 @@ final class Inquiry_Bridge_Plugin
         add_action('wpforms_process_entry_saved', [__CLASS__, 'on_entry_saved'], 999, 4);
 
         add_filter('wpforms_disable_all_emails', [__CLASS__, 'maybe_disable_emails']);
+    }
+
+    public static function register_rest_routes()
+    {
+        register_rest_route('inquiry-bridge/v1', '/version', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'rest_version'],
+            'permission_callback' => [__CLASS__, 'rest_check_site_key'],
+        ]);
+        register_rest_route('inquiry-bridge/v1', '/self-update', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_self_update'],
+            'permission_callback' => [__CLASS__, 'rest_check_site_key'],
+        ]);
+    }
+
+    /** @param WP_REST_Request $request */
+    public static function rest_check_site_key($request)
+    {
+        $settings = self::settings();
+        $expected = isset($settings['site_key']) ? (string) $settings['site_key'] : '';
+        if ($expected === '') {
+            return new WP_Error('misconfigured', 'Site key not configured', ['status' => 503]);
+        }
+        $got = (string) $request->get_header('X-Inquiry-Site-Key');
+        if ($got === '') {
+            $got = (string) $request->get_param('site_key');
+        }
+        if ($got === '' || !hash_equals($expected, $got)) {
+            return new WP_Error('forbidden', 'Invalid site key', ['status' => 403]);
+        }
+        return true;
+    }
+
+    public static function rest_version()
+    {
+        return rest_ensure_response([
+            'ok' => true,
+            'version' => self::VERSION,
+            'plugin' => 'wp-inquiry-bridge/inquiry-bridge.php',
+        ]);
+    }
+
+    /** @param WP_REST_Request $request */
+    public static function rest_self_update($request)
+    {
+        if (!function_exists('download_url')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        require_once ABSPATH . 'wp-admin/includes/misc.php';
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+        $settings = self::settings();
+        $body_url = (string) $request->get_param('download_url');
+        $zip_url = self::resolve_update_zip_url($settings, $body_url);
+        if (is_wp_error($zip_url)) {
+            return $zip_url;
+        }
+
+        // 临时允许本请求内覆盖同名插件
+        add_filter('upgrader_package_options', [__CLASS__, 'force_overwrite_package']);
+
+        $skin = new Automatic_Upgrader_Skin();
+        $upgrader = new Plugin_Upgrader($skin);
+        $result = $upgrader->install($zip_url, ['overwrite_package' => true, 'clear_destination' => true]);
+
+        remove_filter('upgrader_package_options', [__CLASS__, 'force_overwrite_package']);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($result !== true) {
+            $messages = method_exists($skin, 'get_upgrade_messages') ? $skin->get_upgrade_messages() : [];
+            return new WP_Error(
+                'update_failed',
+                'Plugin update failed',
+                ['status' => 500, 'messages' => $messages]
+            );
+        }
+
+        $plugin_file = 'wp-inquiry-bridge/inquiry-bridge.php';
+        if (!is_plugin_active($plugin_file)) {
+            activate_plugin($plugin_file, '', false, false);
+        }
+
+        // 重新读文件头版本（覆盖后常量可能仍是旧进程值；读文件更准）
+        $ver = self::VERSION;
+        $main = WP_PLUGIN_DIR . '/' . $plugin_file;
+        if (is_readable($main)) {
+            $head = (string) file_get_contents($main, false, null, 0, 4096);
+            if (preg_match('/^\s*\*\s*Version:\s*([0-9][^\r\n]*)/m', $head, $m)) {
+                $ver = trim($m[1]);
+            }
+        }
+
+        return rest_ensure_response([
+            'ok' => true,
+            'version' => $ver,
+            'message' => 'updated',
+        ]);
+    }
+
+    public static function force_overwrite_package($options)
+    {
+        if (is_array($options)) {
+            $options['clear_destination'] = true;
+            $options['abort_if_destination_exists'] = false;
+        }
+        return $options;
+    }
+
+    /**
+     * 仅允许下载中心域名（来自已配置 api_url）上的 zip
+     * @param array $settings
+     * @param string $body_url
+     * @return string|WP_Error
+     */
+    private static function resolve_update_zip_url($settings, $body_url)
+    {
+        $api_url = isset($settings['api_url']) ? trim((string) $settings['api_url']) : '';
+        if ($api_url === '') {
+            return new WP_Error('misconfigured', 'API URL not configured', ['status' => 503]);
+        }
+        $base = preg_replace('#/api/ingest/?$#i', '', $api_url);
+        $base = rtrim((string) $base, '/');
+        $fallback = $base . '/api/plugin/latest/zip?site_key=' . rawurlencode((string) $settings['site_key']);
+
+        $candidate = trim($body_url) !== '' ? trim($body_url) : $fallback;
+        $allowed_host = wp_parse_url($base, PHP_URL_HOST);
+        $cand_host = wp_parse_url($candidate, PHP_URL_HOST);
+        if (!$allowed_host || !$cand_host || strtolower($allowed_host) !== strtolower((string) $cand_host)) {
+            return new WP_Error('bad_download', 'download_url host mismatch', ['status' => 400]);
+        }
+        $path = (string) wp_parse_url($candidate, PHP_URL_PATH);
+        if (strpos($path, '/api/plugin/latest/zip') === false) {
+            return new WP_Error('bad_download', 'download_url path not allowed', ['status' => 400]);
+        }
+        return $candidate;
     }
 
     public static function defaults()
@@ -735,8 +876,10 @@ final class Inquiry_Bridge_Plugin
     }
 
     /**
-     * 组装 location + journey（Smart Tag → 表/meta → Cookie/POST）
-     * @param mixed $journey_from_request 请求侧 journey 兜底
+     * 组装 location + journey。
+     * User Journey 展示只用 WPForms 原生 HTML（{entry_user_journey} Smart Tag），
+     * 不做自写表格格式化，也不延迟/补推。
+     * @param mixed $journey_from_request 请求侧 journey 兜底（仅存 raw）
      */
     private static function build_location_journey($entry_id, $form_data, $fields, $entry = null, $journey_from_request = null)
     {
@@ -751,10 +894,17 @@ final class Inquiry_Bridge_Plugin
             ? $tags['geo']
             : self::format_location_text($location_raw);
 
-        if ($tags['journey'] !== '') {
-            $entry_user_journey = $tags['journey'];
-        } else {
-            $entry_user_journey = self::format_user_journey_html($journey_raw);
+        // 仅用后台同款 Smart Tag HTML；结构化 raw 不再转成自定义表格
+        $entry_user_journey = $tags['journey'];
+        if ($entry_user_journey === '' && is_string($journey_raw)) {
+            $trim = trim($journey_raw);
+            if (
+                $trim !== ''
+                && strpos($trim, '{entry_user_journey}') === false
+                && (stripos($trim, '<table') !== false || stripos($trim, '<tr') !== false)
+            ) {
+                $entry_user_journey = $trim;
+            }
         }
 
         if ($entry_user_journey === '') {
@@ -849,96 +999,6 @@ final class Inquiry_Bridge_Plugin
             }
         }
         return '';
-    }
-
-    /** 将 User Journey 原始数据格式化为邮件可用的 HTML 表格 */
-    private static function format_user_journey_html($journey)
-    {
-        if ($journey === null || $journey === '') {
-            return '';
-        }
-        if (is_string($journey)) {
-            $trim = trim($journey);
-            if ($trim === '' || strpos($trim, '{entry_user_journey}') !== false) {
-                return '';
-            }
-            // 已是 HTML
-            if (stripos($trim, '<table') !== false || stripos($trim, '<tr') !== false) {
-                return $trim;
-            }
-            $decoded = json_decode($trim, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $journey = $decoded;
-            } else {
-                return esc_html($trim);
-            }
-        }
-
-        if (is_object($journey)) {
-            $journey = (array) $journey;
-        }
-        if (!is_array($journey)) {
-            return '';
-        }
-
-        // 可能包在 steps / pages / journey 键下
-        if (isset($journey['steps']) && is_array($journey['steps'])) {
-            $steps = $journey['steps'];
-        } elseif (isset($journey['pages']) && is_array($journey['pages'])) {
-            $steps = $journey['pages'];
-        } elseif (isset($journey['journey']) && is_array($journey['journey'])) {
-            $steps = $journey['journey'];
-        } else {
-            $steps = $journey;
-        }
-
-        // 关联数组单条 → 包成列表
-        if ($steps && !isset($steps[0]) && (isset($steps['url']) || isset($steps['title']))) {
-            $steps = [$steps];
-        }
-
-        $rows = '';
-        foreach ($steps as $step) {
-            if (is_object($step)) {
-                $step = (array) $step;
-            }
-            if (!is_array($step)) {
-                continue;
-            }
-            $title = self::pick_step_str($step, ['title', 'pageTitle', 'page_title', 'name', 'page']);
-            $url = self::pick_step_str($step, ['url', 'pageUrl', 'page_url', 'href', 'path']);
-            $when = self::pick_step_str($step, ['date', 'datetime', 'timestamp', 'time', 'when', 'created', 'date_created']);
-            $duration = self::pick_step_str($step, ['duration', 'timeOnPage', 'time_on_page', 'time_spent']);
-            $referrer = self::pick_step_str($step, ['referrer', 'referer', 'ref']);
-            if ($title === '' && $url === '') {
-                continue;
-            }
-            if ($title === '') {
-                $title = $url;
-            }
-            $page_html = $url !== ''
-                ? '<a href="' . esc_url($url) . '">' . esc_html($title) . '</a>'
-                : esc_html($title);
-            if ($referrer !== '') {
-                $page_html .= '<div style="color:#94a3b8;font-size:12px;margin-top:2px;">来源：' . esc_html($referrer) . '</div>';
-            }
-            $rows .= '<tr>'
-                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;">' . $page_html . '</td>'
-                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($when !== '' ? $when : '—') . '</td>'
-                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($duration !== '' ? $duration : '—') . '</td>'
-                . '</tr>';
-        }
-
-        if ($rows === '') {
-            return '';
-        }
-
-        return '<table style="border-collapse:collapse;width:100%;font-size:13px;">'
-            . '<thead><tr style="background:#f8fafc;text-align:left;color:#666;">'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">页面</th>'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">时间</th>'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">停留</th>'
-            . '</tr></thead><tbody>' . $rows . '</tbody></table>';
     }
 
     public static function on_entry_saved($fields, $entry, $form_data, $entry_id)

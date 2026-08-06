@@ -3,6 +3,7 @@ import { SiteList } from "@/components/SiteList";
 import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
 import { parseMailHiddenFields } from "@/lib/mail-hidden-config";
+import { hasWpRemoteCreds } from "@/lib/site-credentials";
 import {
   SITE_LIST_TABS,
   parseSiteListTab,
@@ -101,6 +102,10 @@ export default async function SitesPage({
     productKeywords: s.productKeywords,
     spamExtraWords: s.spamExtraWords,
     mailHiddenFields: parseMailHiddenFields(s.mailHiddenFields),
+    wpAdminUrl: s.wpAdminUrl,
+    wpUsername: s.wpUsername,
+    hasWpCredentials: hasWpRemoteCreds(s),
+    hasWpPassword: Boolean(s.wpPasswordEnc),
     enabled: s.enabled,
     clientId: s.clientId,
     clientName: s.client.name,
@@ -133,6 +138,9 @@ export default async function SitesPage({
         hint={
           <div className="space-y-1.5">
             <p>管理客户下属网站；右侧「配置对接」按步骤安装插件并完成收件配置。</p>
+            <p>
+              可在网站中填写 WP 后台入口与账号；配置齐全后可「进入后台」或「更新插件」（自更新需插件 ≥1.0.13）。
+            </p>
             <p>
               未到期网站按类型分「SEO型 / 展示型」；结束日早于今天归入「到期」。
             </p>

@@ -8,8 +8,23 @@ import {
   serializeMailHiddenFields,
 } from "@/lib/mail-hidden-config";
 import { discoverFieldOptionsFromPayloads } from "@/lib/inquiry-mail-fields";
+import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+function publicSite(site: {
+  wpPasswordEnc: string;
+  mailHiddenFields: string;
+  [key: string]: unknown;
+}) {
+  const { wpPasswordEnc: _enc, ...rest } = site;
+  return {
+    ...rest,
+    mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
+    hasWpCredentials: hasWpRemoteCreds(site),
+    hasWpPassword: Boolean(String(site.wpPasswordEnc || "").trim()),
+  };
+}
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const user = await getSessionUser();
@@ -30,10 +45,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const fieldOptions = discoverFieldOptionsFromPayloads(recent.map((r) => r.rawPayload));
 
   return NextResponse.json({
-    site: {
-      ...site,
-      mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
-    },
+    site: publicSite(site),
     fieldOptions,
   });
 }
@@ -71,6 +83,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
                 : parseMailHiddenFields(String(body.mailHiddenFields || "")),
             )
           : undefined,
+      wpAdminUrl:
+        body.wpAdminUrl !== undefined ? String(body.wpAdminUrl).trim() : undefined,
+      wpUsername:
+        body.wpUsername !== undefined ? String(body.wpUsername).trim() : undefined,
+      wpPasswordEnc:
+        body.wpPassword !== undefined && String(body.wpPassword) !== ""
+          ? encryptSecret(String(body.wpPassword))
+          : body.clearWpPassword === true
+            ? ""
+            : undefined,
       enabled: body.enabled !== undefined ? Boolean(body.enabled) : undefined,
     },
   });
@@ -81,10 +103,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   return NextResponse.json({
-    site: {
-      ...site,
-      mailHiddenFields: parseMailHiddenFields(site.mailHiddenFields),
-    },
+    site: publicSite(site),
   });
 }
 

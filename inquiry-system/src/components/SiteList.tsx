@@ -17,6 +17,10 @@ export type SiteRow = {
   productKeywords: string;
   spamExtraWords: string;
   mailHiddenFields: string[];
+  wpAdminUrl: string;
+  wpUsername: string;
+  hasWpCredentials: boolean;
+  hasWpPassword: boolean;
   enabled: boolean;
   clientId: string;
   clientName: string;
@@ -46,6 +50,9 @@ const emptyForm = {
   siteType: "展示型",
   startDate: "",
   endDate: "",
+  wpAdminUrl: "",
+  wpUsername: "",
+  wpPassword: "",
   enabled: true,
 };
 
@@ -124,6 +131,9 @@ export function SiteList({
       siteType: s.siteType || "展示型",
       startDate: toDateInputValue(s.startDate),
       endDate: toDateInputValue(s.endDate),
+      wpAdminUrl: s.wpAdminUrl || "",
+      wpUsername: s.wpUsername || "",
+      wpPassword: "",
       enabled: s.enabled,
     });
     setError("");
@@ -162,6 +172,71 @@ export function SiteList({
     setBusy(false);
     if (configSite?.id === s.id) setConfigSite(null);
     router.refresh();
+  }
+
+  async function enterWpAdmin(s: SiteRow) {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/sites/${s.id}/wp-login`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "无法进入后台");
+        return;
+      }
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.loginUrl;
+      form.target = "_blank";
+      form.acceptCharset = "UTF-8";
+      const fields: Record<string, string> = {
+        log: data.username,
+        pwd: data.password,
+        "wp-submit": "Log In",
+        redirect_to: data.redirectTo || "",
+        testcookie: "1",
+      };
+      for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+      form.remove();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updatePlugin(s: SiteRow) {
+    if (
+      !confirm(
+        `向「${s.domain}」推送中心最新插件？\n需该站已安装 Inquiry Bridge（含自更新），且 site_key 配置正确。`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/sites/${s.id}/update-plugin`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "更新失败");
+        return;
+      }
+      const remoteVer =
+        typeof data.remote?.version === "string" ? data.remote.version : "";
+      alert(
+        `已触发更新${data.latestVersion ? `（中心版本 ${data.latestVersion}` : ""}${
+          remoteVer ? `，远程 ${remoteVer}` : ""
+        }${data.latestVersion || remoteVer ? "）" : ""}`,
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   const showModal = creating || !!editing;
@@ -337,6 +412,28 @@ export function SiteList({
                   </td>
                   <td className="px-3 py-2">{s.formCount}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
+                    {s.hasWpCredentials ? (
+                      <>
+                        <button
+                          type="button"
+                          className="text-[var(--brand)]"
+                          disabled={busy}
+                          onClick={() => enterWpAdmin(s)}
+                          title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
+                        >
+                          进入后台
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[var(--brand)]"
+                          disabled={busy}
+                          onClick={() => updatePlugin(s)}
+                          title="通过插件自更新接口拉取中心最新 zip"
+                        >
+                          更新插件
+                        </button>
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       className="text-[var(--brand)] font-medium"
@@ -367,7 +464,7 @@ export function SiteList({
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <form
             onSubmit={save}
-            className="bg-white rounded-2xl w-full max-w-lg p-5 space-y-3 shadow-lg"
+            className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-3 shadow-lg"
           >
             <h2 className="text-lg font-semibold">{editing ? "编辑网站" : "新增网站"}</h2>
             <div className="grid gap-3">
@@ -430,6 +527,45 @@ export function SiteList({
                     className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
                   />
                 </label>
+              </div>
+              <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-3">
+                <p className="text-xs text-[var(--muted)] leading-relaxed">
+                  WordPress 运维（可选）：用于「进入后台」与「更新插件」。密码加密存储；遇验证码/双因素时自动登录可能失败。
+                </p>
+                <label className="text-sm block">
+                  <span className="text-xs text-[var(--muted)]">后台入口</span>
+                  <input
+                    value={form.wpAdminUrl}
+                    onChange={(e) => setForm({ ...form, wpAdminUrl: e.target.value })}
+                    placeholder="https://example.com/wp-admin"
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm">
+                    <span className="text-xs text-[var(--muted)]">用户名</span>
+                    <input
+                      value={form.wpUsername}
+                      onChange={(e) => setForm({ ...form, wpUsername: e.target.value })}
+                      autoComplete="off"
+                      className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="text-xs text-[var(--muted)]">
+                      密码
+                      {editing?.hasWpPassword ? "（留空不修改）" : ""}
+                    </span>
+                    <input
+                      type="password"
+                      value={form.wpPassword}
+                      onChange={(e) => setForm({ ...form, wpPassword: e.target.value })}
+                      autoComplete="new-password"
+                      placeholder={editing?.hasWpPassword ? "••••••••" : ""}
+                      className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                    />
+                  </label>
+                </div>
               </div>
               <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
                 <label className="text-sm flex items-start gap-2">

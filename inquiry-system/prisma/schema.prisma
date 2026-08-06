@@ -84,6 +84,11 @@ model Site {
   spamExtraWords  String    @default("")
   /// JSON 字符串数组：邮件隐藏字段 id，默认含 geo、journey
   mailHiddenFields String  @default("")
+  /// WordPress 后台入口（wp-admin 或 wp-login.php）
+  wpAdminUrl      String    @default("")
+  wpUsername      String    @default("")
+  /// AES-GCM 加密后的 WP 登录密码（AUTH_SECRET）
+  wpPasswordEnc   String    @default("")
   enabled         Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

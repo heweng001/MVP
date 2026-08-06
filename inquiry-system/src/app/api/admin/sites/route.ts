@@ -8,6 +8,7 @@ import {
   parseMailHiddenFields,
   serializeMailHiddenFields,
 } from "@/lib/mail-hidden-config";
+import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
@@ -76,10 +77,21 @@ export async function POST(req: NextRequest) {
                 : parseMailHiddenFields(String(body.mailHiddenFields || "")),
             )
           : serializeMailHiddenFields([]),
+      wpAdminUrl: String(body.wpAdminUrl || "").trim(),
+      wpUsername: String(body.wpUsername || "").trim(),
+      wpPasswordEnc: body.wpPassword
+        ? encryptSecret(String(body.wpPassword))
+        : "",
       enabled: body.enabled !== false,
     },
   });
 
   await syncClientServiceDates(clientId);
-  return NextResponse.json({ site });
+  return NextResponse.json({
+    site: {
+      ...site,
+      wpPasswordEnc: undefined,
+      hasWpCredentials: hasWpRemoteCreds(site),
+    },
+  });
 }
