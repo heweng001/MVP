@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.14
+ * Version: 1.0.15
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
-    const VERSION = '1.0.14';
+    const VERSION = '1.0.15';
 
     public static function init()
     {
@@ -1011,7 +1011,7 @@ final class Inquiry_Bridge_Plugin
         return $j;
     }
 
-    /** 将 steps/DB 行格式化为 WPForms 风格 HTML 表（Page / Date / Duration） */
+    /** 将 steps/DB 行格式化为浏览路径表（北京时间 / 中文表头 / 路径后缀） */
     private static function format_journey_steps_html($journey)
     {
         if (is_object($journey)) {
@@ -1045,21 +1045,18 @@ final class Inquiry_Bridge_Plugin
             }
             $title = self::pick_step_str($step, ['title', 'pageTitle', 'page_title', 'name', 'page', 'post_title']);
             $url = self::pick_step_str($step, ['url', 'pageUrl', 'page_url', 'href', 'path', 'permalink']);
-            $when = self::pick_step_str($step, ['date', 'datetime', 'timestamp', 'time', 'when', 'created', 'date_created', 'visited_at']);
-            $duration = self::pick_step_str($step, ['duration', 'timeOnPage', 'time_on_page', 'time_spent', 'spend']);
+            $when_raw = self::pick_step_str($step, ['date', 'datetime', 'timestamp', 'time', 'when', 'created', 'date_created', 'visited_at']);
+            $duration_raw = self::pick_step_str($step, ['duration', 'timeOnPage', 'time_on_page', 'time_spent', 'spend']);
             if ($title === '' && $url === '') {
                 continue;
             }
-            if ($title === '') {
-                $title = $url;
-            }
-            $page_html = $url !== ''
-                ? '<a href="' . esc_url($url) . '">' . esc_html($title) . '</a>'
-                : esc_html($title);
+            $when = $when_raw !== '' ? self::to_beijing_datetime($when_raw) : '—';
+            $duration = self::format_duration_seconds($duration_raw);
+            $page_html = self::journey_page_cell_html($title, $url);
             $rows .= '<tr>'
                 . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;">' . $page_html . '</td>'
-                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($when !== '' ? $when : '—') . '</td>'
-                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($duration !== '' ? $duration : '—') . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($when) . '</td>'
+                . '<td style="padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top;white-space:nowrap;">' . esc_html($duration) . '</td>'
                 . '</tr>';
         }
 
@@ -1069,10 +1066,114 @@ final class Inquiry_Bridge_Plugin
 
         return '<table style="border-collapse:collapse;width:100%;font-size:13px;">'
             . '<thead><tr style="background:#f8fafc;text-align:left;color:#666;">'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Page</th>'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Date</th>'
-            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">Duration</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">页面</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">北京时间</th>'
+            . '<th style="padding:6px 8px;border:1px solid #e2e8f0;">停留秒数</th>'
             . '</tr></thead><tbody>' . $rows . '</tbody></table>';
+    }
+
+    private static function journey_url_path($url)
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+        if (strpos($url, '/') === 0 && !preg_match('#^https?://#i', $url)) {
+            return $url;
+        }
+        $parts = wp_parse_url($url);
+        if (!is_array($parts)) {
+            return '';
+        }
+        $path = isset($parts['path']) && $parts['path'] !== '' ? $parts['path'] : '/';
+        if (!empty($parts['query'])) {
+            $path .= '?' . $parts['query'];
+        }
+        if (!empty($parts['fragment'])) {
+            $path .= '#' . $parts['fragment'];
+        }
+        return $path;
+    }
+
+    private static function journey_page_cell_html($title, $url)
+    {
+        $path = $url !== '' ? self::journey_url_path($url) : '';
+        if ($title !== '' && $path !== '') {
+            $body = esc_html($title)
+                . '<div style="color:#64748b;font-size:12px;margin-top:2px;word-break:break-all;">'
+                . esc_html($path)
+                . '</div>';
+        } elseif ($title !== '') {
+            $body = esc_html($title);
+        } elseif ($path !== '') {
+            $body = esc_html($path);
+        } else {
+            $body = esc_html($url);
+        }
+        if ($url !== '') {
+            return '<a href="' . esc_url($url) . '" style="color:inherit;text-decoration:none;">' . $body . '</a>';
+        }
+        return $body;
+    }
+
+    /** UTC/时间戳 → 北京时间 Y-m-d H:i:s */
+    private static function to_beijing_datetime($raw)
+    {
+        $t = trim((string) $raw);
+        if ($t === '') {
+            return '—';
+        }
+        $tz = new DateTimeZone('Asia/Shanghai');
+        try {
+            if (preg_match('/^\d{10}$/', $t)) {
+                $dt = new DateTime('@' . $t);
+            } elseif (preg_match('/^\d{13}$/', $t)) {
+                $dt = new DateTime('@' . (int) floor(((int) $t) / 1000));
+            } elseif (preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/', $t)) {
+                $has_tz = (bool) preg_match('/[zZ]|[+-]\d{2}:?\d{2}$/', $t);
+                $normalized = str_replace(' ', 'T', $t);
+                $dt = $has_tz
+                    ? new DateTime($normalized)
+                    : new DateTime($normalized, new DateTimeZone('UTC'));
+            } else {
+                $dt = new DateTime($t);
+            }
+            $dt->setTimezone($tz);
+            return $dt->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return $t;
+        }
+    }
+
+    private static function format_duration_seconds($raw)
+    {
+        $t = trim((string) $raw);
+        if ($t === '') {
+            return '—';
+        }
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*s$/i', $t, $m)) {
+            return (string) (int) round((float) $m[1]);
+        }
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*(sec|secs|second|seconds)$/i', $t, $m)) {
+            return (string) (int) round((float) $m[1]);
+        }
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*(ms|msec|milliseconds)$/i', $t, $m)) {
+            return (string) (int) round(((float) $m[1]) / 1000);
+        }
+        if (preg_match('/^(\d+):(\d{2}):(\d{2})$/', $t, $m)) {
+            return (string) ((int) $m[1] * 3600 + (int) $m[2] * 60 + (int) $m[3]);
+        }
+        if (preg_match('/^(\d+):(\d{2})$/', $t, $m)) {
+            return (string) ((int) $m[1] * 60 + (int) $m[2]);
+        }
+        if (preg_match('/^\d+(?:\.\d+)?$/', $t)) {
+            $n = (float) $t;
+            if ($n >= 10000) {
+                return (string) (int) round($n / 1000);
+            }
+            return (string) (int) round($n);
+        }
+        return $t;
     }
 
     /** 将 Location 板块数据格式化为可读文本（供中心系统展示） */

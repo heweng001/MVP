@@ -122,16 +122,14 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
       : null;
 
   const geoFromMeta = rootObj ? String(rootObj.entry_geolocation || "").trim() : "";
-  let journeyFromMeta = rootObj
-    ? String(rootObj.entry_user_journey || "").trim()
-    : "";
-  // 插件常把结构化 steps 放在 user_journey，而 entry_user_journey（HTML）为空
-  if (
-    (!journeyFromMeta || journeyFromMeta.includes("{entry_user_journey}")) &&
-    rootObj?.user_journey != null &&
-    rootObj.user_journey !== ""
-  ) {
+  let journeyFromMeta = "";
+  // 优先用结构化 user_journey 按北京时间/中文表头重渲染；否则退回已存 HTML
+  if (rootObj?.user_journey != null && rootObj.user_journey !== "") {
     journeyFromMeta = formatUserJourneyHtml(rootObj.user_journey);
+  }
+  if (!journeyFromMeta) {
+    journeyFromMeta = rootObj ? String(rootObj.entry_user_journey || "").trim() : "";
+    if (journeyFromMeta.includes("{entry_user_journey}")) journeyFromMeta = "";
   }
 
   const hiddens = parseWpFormFields(rawPayload).filter((f) => f.type === "hidden");
