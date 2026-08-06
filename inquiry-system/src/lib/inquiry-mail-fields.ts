@@ -523,7 +523,7 @@ export function buildFeedbackDetailFields(opts: {
   if (gate.displayUpgrade) {
     return {
       messageTip: "",
-      followupTip: isValid ? MAIL_TIPS.followupSentFeedback : MAIL_TIPS.markValidToGetFollowup,
+      followupTip: isValid ? MAIL_TIPS.followupSentFeedback : "",
       fields: [],
     };
   }
@@ -531,7 +531,7 @@ export function buildFeedbackDetailFields(opts: {
   // SEO 服务期内：反馈页不重复铺 geo（已在第一封）；有效后提示第二封
   return {
     messageTip: "",
-    followupTip: isValid ? MAIL_TIPS.followupSentFeedback : MAIL_TIPS.markValidToGetFollowup,
+    followupTip: isValid ? MAIL_TIPS.followupSentFeedback : "",
     fields: [],
   };
 }
