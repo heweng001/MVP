@@ -84,10 +84,6 @@ export function MarkConfirm({
       setMarkReason(data.markReason);
       setSavedReason(data.markReason);
     }
-    if (data.status === "valid") {
-      setMarkReason("");
-      setSavedReason("");
-    }
     setDetailsVisible(!!data.showUnlockedDetails);
     if (Array.isArray(data.unlockedFields)) {
       setDetailFields(data.unlockedFields);
@@ -101,7 +97,11 @@ export function MarkConfirm({
     if (typeof data.followupError === "string" && data.followupError) {
       setFollowErr(data.followupError);
     }
-    setOkMsg(action === "valid" ? "已标记为有效" : "已标记为无效");
+    setOkMsg(
+      action === "valid"
+        ? "已标记为有效，新邮件正在发送"
+        : "已标记为无效",
+    );
   }
 
   async function submitReasonOnly() {

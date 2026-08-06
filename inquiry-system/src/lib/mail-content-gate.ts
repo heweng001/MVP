@@ -21,9 +21,9 @@ export const MAIL_TIPS = {
   doNotReplyFirstMail:
     "请勿回复本邮件，如确认询盘有效，请点击下方「标为有效」按钮，系统将发送一封新邮件，需在新邮件中即可回复买家。",
   followupSentFeedback:
-    "系统已向您发送含买家邮箱的新邮件。请在新邮件中回复买家。",
+    "已标记为有效。含买家邮箱的新邮件正在发送，请稍后在邮箱中打开新邮件并回复买家。",
   markValidToGetFollowup:
-    "标记为「有效」后，系统将立刻发送含买家邮箱的第二封邮件，请在那一封中回复买家。",
+    "标记为「有效」后，系统将发送含买家邮箱的新邮件，请在新邮件中回复买家。",
 } as const;
 
 export function mailContentGate(site: {

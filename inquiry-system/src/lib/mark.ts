@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { prisma } from "./prisma";
 import { InquiryStatus, isSpamStatus, markHours } from "./constants";
 import { mailContentGate, MAIL_TIPS } from "./mail-content-gate";
@@ -7,7 +8,7 @@ import { sendInquiryFollowupById } from "./pipeline";
 export type MarkAction = "valid" | "invalid";
 
 export const INVALID_MARK_EXPIRED_TIP =
-  "发信已超过 72 小时，无法再标记为无效。你仍可将询盘标记为有效；标记有效后系统将发送含买家邮箱的第二封邮件。";
+  "发信已超过 72 小时，无法再标记为无效。你仍可将询盘标记为有效；标记有效后系统将发送含买家邮箱的新邮件。";
 
 export type MarkCapabilities = {
   canInteract: boolean;
@@ -111,6 +112,15 @@ function normalizeReason(reason?: string | null) {
     .slice(0, 500);
 }
 
+/** 响应返回后再发第二封，避免阻塞标记页 */
+function scheduleFollowupSend(inquiryId: string, source: "mark" | "admin") {
+  after(() => {
+    void sendInquiryFollowupById(inquiryId).catch((e) => {
+      console.error(`[${source}] followup send failed`, inquiryId, e);
+    });
+  });
+}
+
 export async function applyMark(token: string, action: MarkAction, reason?: string | null) {
   const inquiry = await getInquiryByToken(token);
   if (!inquiry) return { ok: false as const, error: "无效链接" };
@@ -130,27 +140,21 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
       data: {
         status: InquiryStatus.VALID,
         markedAt: new Date(),
-        markReason: "",
+        // 保留此前「无效」时填写的反馈原因，不清空
       },
       include: { site: true },
     });
 
-    let followupError = "";
     const gate = mailContentGate(updated.site);
     if (!wasAlreadyValid && !gate.expired) {
-      try {
-        await sendInquiryFollowupById(updated.id);
-      } catch (e) {
-        console.error("[mark] followup send failed", updated.id, e);
-        followupError = e instanceof Error ? e.message : String(e);
-      }
+      scheduleFollowupSend(updated.id, "mark");
     }
 
     const fresh = await getInquiryByToken(token);
     return {
       ok: true as const,
       inquiry: fresh ?? updated,
-      followupError,
+      followupError: "",
     };
   }
 
@@ -226,7 +230,7 @@ export function unlockedDetailFields(inquiry: {
   });
 }
 
-/** 管理员将状态改为有效时触发第二封（服务期内） */
+/** 管理员将状态改为有效时触发第二封（服务期内，异步） */
 export async function maybeSendFollowupAfterAdminValid(inquiryId: string) {
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
@@ -235,9 +239,5 @@ export async function maybeSendFollowupAfterAdminValid(inquiryId: string) {
   if (!inquiry) return;
   const gate = mailContentGate(inquiry.site);
   if (gate.expired) return;
-  try {
-    await sendInquiryFollowupById(inquiryId);
-  } catch (e) {
-    console.error("[admin] followup send failed", inquiryId, e);
-  }
+  scheduleFollowupSend(inquiryId, "admin");
 }
