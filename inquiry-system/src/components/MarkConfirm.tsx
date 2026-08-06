@@ -142,19 +142,18 @@ export function MarkConfirm({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-teal-50/80 border border-teal-100 px-3.5 py-3 text-sm leading-relaxed text-[var(--ink)]">
-        感谢你配合对询盘质量进行反馈。我们将根据你反馈的信息，针对性调整网站引流方向，持续提升询盘质量。
-      </div>
+      {!marked ? (
+        <div className="rounded-lg bg-teal-50/80 border border-teal-100 px-3.5 py-3 text-sm leading-relaxed text-[var(--ink)]">
+          感谢你配合对询盘质量进行反馈。我们将根据你反馈的信息，针对性调整网站引流方向，持续提升询盘质量。
+        </div>
+      ) : null}
 
       {marked ? (
         <div className="text-center py-1">
           <p className="text-[var(--brand)] font-semibold text-xl sm:text-2xl tracking-tight">
             {justApplied ? "已成功标记为" : "当前标记为"}「{STATUS_LABELS[status] || status}」
           </p>
-          {status === "valid" ? (
-            <p className="text-sm text-[var(--muted)] mt-2">已标记为有效的询盘不可再改为无效。</p>
-          ) : null}
-          {followTip ? (
+          {status === "valid" && followTip ? (
             <p className="text-sm text-[var(--brand)] mt-3 leading-relaxed bg-teal-50 border border-teal-100 rounded-md px-3 py-2">
               {followTip}
             </p>
@@ -220,7 +219,7 @@ export function MarkConfirm({
       {status === "invalid" ? (
         <div className="space-y-1.5">
           <label className="text-sm text-[var(--ink)]" htmlFor="mark-reason">
-            反馈原因 <span className="text-[var(--muted)] font-normal">（选填，可稍后补充）</span>
+            反馈原因
           </label>
           <textarea
             id="mark-reason"
@@ -229,7 +228,7 @@ export function MarkConfirm({
             disabled={!canEditReason}
             maxLength={500}
             rows={3}
-            placeholder="请备注将此询盘标记为无效的具体原因。"
+            placeholder="请帮忙反馈标记此询盘为无效的主要原因，以便我们针对性调整网站引流方向和内容，降低无效询盘比例"
             className="w-full rounded-md border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)] disabled:bg-slate-50 disabled:text-[var(--muted)]"
           />
           <p className="text-[11px] text-[var(--muted)]">{markReason.length}/500</p>

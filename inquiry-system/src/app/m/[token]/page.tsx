@@ -54,9 +54,7 @@ export default async function MarkPage({ params, searchParams }: Ctx) {
         <h1 className="text-lg sm:text-xl font-semibold tracking-tight mb-1">询盘质量反馈</h1>
         <p className="text-[13px] text-[var(--muted)] mb-4 sm:mb-5 break-words">
           {inquiry.site.domain}
-          {inquiry.name || inquiry.email
-            ? ` · ${inquiry.name || "—"}${inquiry.email ? ` / ${inquiry.email}` : ""}`
-            : ""}
+          {inquiry.name?.trim() ? ` · ${inquiry.name.trim()}` : ""}
         </p>
         <MarkConfirm
           token={token}

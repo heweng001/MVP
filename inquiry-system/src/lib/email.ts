@@ -176,24 +176,8 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     : "";
 
   const separatorHtml =
-    includeMark || below.length
-      ? `
-    <div style="margin:20px 0 16px;border:none;border-top:2px dashed #94a3b8;padding-top:10px;text-align:center;">
-      <p style="margin:0;font-size:14px;line-height:1.5;">
-        ————
-        <span style="color:#dc2626;font-weight:700;">${
-          includeMark
-            ? "回复客户邮件前，请务必删掉分割线后所有内容！！！"
-            : "以下为补充说明（如有）"
-        }</span>
-        ————
-      </p>
-    </div>`
-      : "";
-
-  const followupLeadHtml =
-    phase === "followup"
-      ? `<p style="margin:0 0 12px;padding:10px 12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:4px;color:#065f46;font-size:13px;line-height:1.5;">本邮件含买家联系邮箱。请直接点击「回复」联系买家（勿再使用第一封标记邮件回复）。</p>`
+    below.length || includeMark
+      ? `<div style="margin:20px 0 16px;border:none;border-top:2px dashed #94a3b8;"></div>`
       : "";
 
   const { attachments, notes: attachNotes } = files.length
@@ -210,9 +194,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
 
   const html = `
   <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
-    <p>You have a new inquiry from website <strong>${escapeHtml(payload.siteName)}</strong>.</p>
     ${doNotReplyHtml}
-    ${followupLeadHtml}
     ${fieldsTableHtml}
     ${attachNoteHtml}
     ${separatorHtml}
@@ -221,18 +203,12 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   </div>`;
 
   const textParts = [
-    `You have a new inquiry from website ${payload.siteName}.`,
-    ...(payload.doNotReplyHint ? ["", payload.doNotReplyHint, ""] : []),
-    ...(phase === "followup"
-      ? ["", "本邮件含买家联系邮箱。请直接回复本邮件联系买家。", ""]
-      : []),
+    ...(payload.doNotReplyHint ? [payload.doNotReplyHint, ""] : []),
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
   ];
   if (includeMark) {
     textParts.push(
-      "",
-      "———— 回复客户邮件前，请务必删掉分割线后所有内容！！！ ————",
       "",
       "请配合标记本封询盘，有利于我们提升询盘质量",
       `标为有效：${validUrl}`,
@@ -257,13 +233,16 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   }
 
   const fromAddr = cfg.from || cfg.user || "noreply@example.com";
-  const subjectPrefix = phase === "followup" ? "[询盘·可回复买家]" : "[询盘]";
+  const subject =
+    phase === "followup"
+      ? `Inquiry from ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`
+      : `[询盘提醒] ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`;
   await transport.sendMail({
     from: fromAddr,
     to: payload.to.join(", "),
     cc: payload.cc?.length ? payload.cc.join(", ") : undefined,
     replyTo: payload.replyToBuyer ? payload.email || undefined : undefined,
-    subject: `${subjectPrefix} ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`,
+    subject,
     text,
     html,
     attachments: attachments.length ? attachments : undefined,

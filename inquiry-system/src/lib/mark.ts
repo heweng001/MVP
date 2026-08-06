@@ -80,7 +80,7 @@ export function getMarkCapabilities(inquiry: {
   let followupTip = "";
   if (!gate.expired) {
     if (isValid) followupTip = MAIL_TIPS.followupSentFeedback;
-    else if (unmarked || isInvalid) followupTip = MAIL_TIPS.markValidToGetFollowup;
+    else if (unmarked) followupTip = MAIL_TIPS.markValidToGetFollowup;
   }
 
   return {
