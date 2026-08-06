@@ -3,14 +3,11 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/constants";
 import { readPluginVersion } from "@/lib/plugin-meta";
-import {
-  hasWpRemoteCreds,
-  resolveWpSiteRoot,
-} from "@/lib/site-credentials";
+import { resolveWpSiteRoot } from "@/lib/site-credentials";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** 触发远程站点插件自更新（site_key；需已配置运维凭据作门禁） */
+/** 触发远程站点插件自更新（校验 site_key，从中心拉取最新 zip） */
 export async function POST(_req: NextRequest, ctx: Ctx) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,12 +15,6 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const site = await prisma.site.findUnique({ where: { id } });
   if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!hasWpRemoteCreds(site)) {
-    return NextResponse.json(
-      { error: "请先配置后台入口、用户名和密码后再更新插件" },
-      { status: 400 },
-    );
-  }
 
   const root = resolveWpSiteRoot(site.wpAdminUrl, site.domain);
   if (!root) {

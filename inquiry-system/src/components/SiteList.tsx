@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
@@ -57,19 +57,18 @@ const emptyForm = {
   enabled: true,
 };
 
-type PluginVerState =
-  | { status: "loading" }
-  | { status: "ok"; version: string }
-  | { status: "error"; error: string };
-
-type UpdateProgress = {
-  siteId: string;
-  domain: string;
+type BatchPluginProgress = {
+  phase: "detect" | "update" | "done";
   percent: number;
   label: string;
-  done?: boolean;
-  error?: string;
-  resultVersion?: string;
+  total: number;
+  checked: number;
+  needUpdate: number;
+  updated: number;
+  failed: number;
+  unreachable: number;
+  current?: string;
+  errors: string[];
 };
 
 export function SiteList({
@@ -103,8 +102,7 @@ export function SiteList({
   const [configSite, setConfigSite] = useState<SiteRow | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
-  const [pluginVers, setPluginVers] = useState<Record<string, PluginVerState>>({});
-  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
+  const [batchProgress, setBatchProgress] = useState<BatchPluginProgress | null>(null);
 
   function buildHref(overrides: Record<string, string | null | undefined> = {}) {
     const p = new URLSearchParams();
@@ -231,188 +229,202 @@ export function SiteList({
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    const sites = initialSites;
-    const ids = sites.map((s) => s.id);
-    setPluginVers((prev) => {
-      const next: Record<string, PluginVerState> = {};
-      for (const id of ids) {
-        next[id] = { status: "loading" };
-      }
-      // keep unrelated cached entries out of current tab
-      return next;
-    });
-
-    void (async () => {
-      await Promise.all(
-        sites.map(async (s) => {
-          try {
-            const res = await fetch(`/api/admin/sites/${s.id}/plugin-version`, {
-              cache: "no-store",
-            });
-            const data = await res.json().catch(() => ({}));
-            if (cancelled) return;
-            if (data.ok && data.version) {
-              setPluginVers((prev) => ({
-                ...prev,
-                [s.id]: { status: "ok", version: String(data.version) },
-              }));
-            } else {
-              setPluginVers((prev) => ({
-                ...prev,
-                [s.id]: {
-                  status: "error",
-                  error: String(data.error || "无法获取版本"),
-                },
-              }));
-            }
-          } catch (e) {
-            if (cancelled) return;
-            setPluginVers((prev) => ({
-              ...prev,
-              [s.id]: {
-                status: "error",
-                error: e instanceof Error ? e.message : "检测失败",
-              },
-            }));
-          }
-        }),
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // 仅按当前列表站点 id 集合刷新检测
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSites.map((s) => s.id).join(",")]);
-
-  async function updatePluginFromVersion(s: SiteRow) {
-    if (!s.hasWpCredentials) {
-      alert("请先在编辑中配置后台入口、用户名和密码，再更新插件。");
+  async function batchUpdatePlugins() {
+    if (!latestPluginVersion) {
+      alert("无法读取中心最新插件版本，请稍后重试。");
       return;
     }
     if (
       !confirm(
-        `将「${s.domain}」的插件更新到中心最新版${latestPluginVersion ? ` ${latestPluginVersion}` : ""}？`,
+        `将检测全部网站的 Inquiry Bridge 版本，并把低于 ${latestPluginVersion} 的站点自动更新。是否继续？`,
       )
     ) {
       return;
     }
 
     setBusy(true);
-    setUpdateProgress({
-      siteId: s.id,
-      domain: s.domain,
-      percent: 8,
-      label: "正在连接站点…",
+    setBatchProgress({
+      phase: "detect",
+      percent: 2,
+      label: "正在加载网站列表…",
+      total: 0,
+      checked: 0,
+      needUpdate: 0,
+      updated: 0,
+      failed: 0,
+      unreachable: 0,
+      errors: [],
     });
 
-    const steps = [
-      { at: 1200, percent: 28, label: "正在校验 site_key…" },
-      { at: 2800, percent: 48, label: "正在下载最新插件包…" },
-      { at: 5200, percent: 72, label: "正在覆盖安装…" },
-      { at: 8000, percent: 88, label: "即将完成，请稍候…" },
-    ];
-    const timers = steps.map((step) =>
-      window.setTimeout(() => {
-        setUpdateProgress((prev) =>
-          prev && prev.siteId === s.id && !prev.done && !prev.error
-            ? { ...prev, percent: Math.max(prev.percent, step.percent), label: step.label }
-            : prev,
-        );
-      }, step.at),
-    );
-
     try {
-      const res = await fetch(`/api/admin/sites/${s.id}/update-plugin`, { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      timers.forEach((t) => window.clearTimeout(t));
-      if (!res.ok) {
-        setUpdateProgress({
-          siteId: s.id,
-          domain: s.domain,
+      const listRes = await fetch("/api/admin/sites", { cache: "no-store" });
+      const listData = await listRes.json().catch(() => ({}));
+      if (!listRes.ok) {
+        throw new Error(listData.error || "加载网站列表失败");
+      }
+      const sites: { id: string; domain: string }[] = Array.isArray(listData.sites)
+        ? listData.sites.map((s: { id: string; domain: string }) => ({
+            id: String(s.id),
+            domain: String(s.domain || ""),
+          }))
+        : [];
+
+      if (sites.length === 0) {
+        setBatchProgress({
+          phase: "done",
           percent: 100,
-          label: "更新失败",
-          done: true,
-          error: data.error || "更新失败",
+          label: "没有可检测的网站",
+          total: 0,
+          checked: 0,
+          needUpdate: 0,
+          updated: 0,
+          failed: 0,
+          unreachable: 0,
+          errors: [],
         });
         return;
       }
-      const remoteVer =
-        typeof data.remote?.version === "string"
-          ? data.remote.version
-          : typeof data.latestVersion === "string"
-            ? data.latestVersion
-            : latestPluginVersion;
-      setUpdateProgress({
-        siteId: s.id,
-        domain: s.domain,
-        percent: 100,
-        label: "更新完成",
-        done: true,
-        resultVersion: remoteVer,
-      });
-      if (remoteVer) {
-        setPluginVers((prev) => ({
-          ...prev,
-          [s.id]: { status: "ok", version: remoteVer },
-        }));
+
+      const outdated: { id: string; domain: string; version: string }[] = [];
+      let checked = 0;
+      let unreachable = 0;
+      const errors: string[] = [];
+
+      for (const site of sites) {
+        checked += 1;
+        setBatchProgress({
+          phase: "detect",
+          percent: Math.round((checked / sites.length) * 45),
+          label: `正在检测 ${site.domain}（${checked}/${sites.length}）`,
+          total: sites.length,
+          checked,
+          needUpdate: outdated.length,
+          updated: 0,
+          failed: 0,
+          unreachable,
+          current: site.domain,
+          errors: [...errors],
+        });
+
+        try {
+          const res = await fetch(`/api/admin/sites/${site.id}/plugin-version`, {
+            cache: "no-store",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (data.ok && data.version) {
+            const ver = String(data.version);
+            if (compareSemver(ver, latestPluginVersion) < 0) {
+              outdated.push({ id: site.id, domain: site.domain, version: ver });
+            }
+          } else {
+            unreachable += 1;
+            errors.push(`${site.domain}：${data.error || "无法获取版本"}`);
+          }
+        } catch (e) {
+          unreachable += 1;
+          errors.push(
+            `${site.domain}：${e instanceof Error ? e.message : "检测失败"}`,
+          );
+        }
       }
-    } catch (e) {
-      timers.forEach((t) => window.clearTimeout(t));
-      setUpdateProgress({
-        siteId: s.id,
-        domain: s.domain,
+
+      if (outdated.length === 0) {
+        setBatchProgress({
+          phase: "done",
+          percent: 100,
+          label: "检测完成：全部可访问站点均为最新版，无需更新",
+          total: sites.length,
+          checked,
+          needUpdate: 0,
+          updated: 0,
+          failed: 0,
+          unreachable,
+          errors,
+        });
+        return;
+      }
+
+      let updated = 0;
+      let failed = 0;
+      for (let i = 0; i < outdated.length; i++) {
+        const site = outdated[i];
+        const base = 45;
+        const span = 55;
+        setBatchProgress({
+          phase: "update",
+          percent: Math.round(base + ((i + 0.3) / outdated.length) * span),
+          label: `正在更新 ${site.domain}（${site.version} → ${latestPluginVersion}，${i + 1}/${outdated.length}）`,
+          total: sites.length,
+          checked,
+          needUpdate: outdated.length,
+          updated,
+          failed,
+          unreachable,
+          current: site.domain,
+          errors: [...errors],
+        });
+
+        try {
+          const res = await fetch(`/api/admin/sites/${site.id}/update-plugin`, {
+            method: "POST",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            failed += 1;
+            errors.push(`${site.domain}：${data.error || "更新失败"}`);
+          } else {
+            updated += 1;
+          }
+        } catch (e) {
+          failed += 1;
+          errors.push(
+            `${site.domain}：${e instanceof Error ? e.message : "更新失败"}`,
+          );
+        }
+
+        setBatchProgress({
+          phase: "update",
+          percent: Math.round(base + ((i + 1) / outdated.length) * span),
+          label: `已处理 ${i + 1}/${outdated.length} 个待更新站点`,
+          total: sites.length,
+          checked,
+          needUpdate: outdated.length,
+          updated,
+          failed,
+          unreachable,
+          current: site.domain,
+          errors: [...errors],
+        });
+      }
+
+      setBatchProgress({
+        phase: "done",
         percent: 100,
-        label: "更新失败",
-        done: true,
-        error: e instanceof Error ? e.message : "更新失败",
+        label: `完成：需更新 ${outdated.length} 个，成功 ${updated} 个${failed ? `，失败 ${failed} 个` : ""}`,
+        total: sites.length,
+        checked,
+        needUpdate: outdated.length,
+        updated,
+        failed,
+        unreachable,
+        errors,
+      });
+    } catch (e) {
+      setBatchProgress({
+        phase: "done",
+        percent: 100,
+        label: "批量更新中断",
+        total: 0,
+        checked: 0,
+        needUpdate: 0,
+        updated: 0,
+        failed: 0,
+        unreachable: 0,
+        errors: [e instanceof Error ? e.message : String(e)],
       });
     } finally {
       setBusy(false);
     }
-  }
-
-  function renderPluginVersionCell(s: SiteRow) {
-    const st = pluginVers[s.id];
-    if (!st || st.status === "loading") {
-      return <span className="text-xs text-[var(--muted)]">检测中…</span>;
-    }
-    if (st.status === "error") {
-      return (
-        <span className="text-xs text-[var(--muted)]" title={st.error}>
-          未知
-        </span>
-      );
-    }
-    const outdated =
-      Boolean(latestPluginVersion) && compareSemver(st.version, latestPluginVersion) < 0;
-    if (outdated) {
-      return (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => updatePluginFromVersion(s)}
-          className="text-left disabled:opacity-50"
-          title={`当前 ${st.version}，最新 ${latestPluginVersion}，点击更新`}
-        >
-          <span className="text-[var(--brand)] font-medium underline underline-offset-2">
-            {st.version}
-          </span>
-          <span className="block text-[10px] text-amber-700 mt-0.5">可更新 → {latestPluginVersion}</span>
-        </button>
-      );
-    }
-    return (
-      <span className="text-xs" title={latestPluginVersion ? `已是最新（${latestPluginVersion}）` : ""}>
-        {st.version}
-        {latestPluginVersion && compareSemver(st.version, latestPluginVersion) >= 0 ? (
-          <span className="ml-1 text-[10px] text-teal-700">最新</span>
-        ) : null}
-      </span>
-    );
   }
 
   const showModal = creating || !!editing;
@@ -424,6 +436,24 @@ export function SiteList({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => batchUpdatePlugins()}
+          disabled={busy || !latestPluginVersion}
+          className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+          title={
+            latestPluginVersion
+              ? `检测全部网站并更新到 ${latestPluginVersion}`
+              : "无法读取中心插件版本"
+          }
+        >
+          插件更新
+          {latestPluginVersion ? (
+            <span className="ml-1 opacity-80 text-xs">→ {latestPluginVersion}</span>
+          ) : null}
+        </button>
+      </div>
       <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3 shadow-sm">
         <input type="hidden" name="tab" value={tab} />
         {filters.sort ? (
@@ -513,7 +543,7 @@ export function SiteList({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[1080px]">
+        <table className="w-full text-sm min-w-[980px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">域名</th>
@@ -532,21 +562,6 @@ export function SiteList({
               <th className="px-3 py-2" title="是否接受该站 WordPress 插件推送的询盘">
                 对接状态
               </th>
-              <th
-                className="px-3 py-2"
-                title={
-                  latestPluginVersion
-                    ? `中心最新插件 ${latestPluginVersion}；非最新可点击版本号更新`
-                    : "各站 Inquiry Bridge 插件版本"
-                }
-              >
-                插件版本
-                {latestPluginVersion ? (
-                  <span className="block text-[10px] font-normal text-[var(--muted)]">
-                    最新 {latestPluginVersion}
-                  </span>
-                ) : null}
-              </th>
               <th className="px-3 py-2">
                 <Link href={sortHref("formCount")} className="hover:text-[var(--ink)]" title="按表单数排序">
                   表单数{sortMark("formCount")}
@@ -558,7 +573,7 @@ export function SiteList({
           <tbody>
             {initialSites.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={8} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -601,7 +616,6 @@ export function SiteList({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{renderPluginVersionCell(s)}</td>
                   <td className="px-3 py-2">{s.formCount}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                     {s.hasWpCredentials ? (
@@ -641,40 +655,56 @@ export function SiteList({
         </table>
       </div>
 
-      {updateProgress ? (
+      {batchProgress ? (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-lg space-y-4">
-            <h3 className="text-base font-semibold">更新插件</h3>
-            <p className="text-sm text-[var(--muted)] break-all">{updateProgress.domain}</p>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-5 shadow-lg space-y-4">
+            <h3 className="text-base font-semibold">插件批量更新</h3>
+            {latestPluginVersion ? (
+              <p className="text-xs text-[var(--muted)]">中心最新版：{latestPluginVersion}</p>
+            ) : null}
             <div className="space-y-2">
               <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    updateProgress.error ? "bg-[var(--danger)]" : "bg-[var(--brand)]"
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, updateProgress.percent))}%` }}
+                  className="h-full rounded-full bg-[var(--brand)] transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(0, batchProgress.percent))}%` }}
                 />
               </div>
-              <p className="text-sm text-[var(--ink)]">{updateProgress.label}</p>
-              {updateProgress.error ? (
-                <p className="text-sm text-[var(--danger)] whitespace-pre-wrap">{updateProgress.error}</p>
+              <p className="text-sm text-[var(--ink)]">{batchProgress.label}</p>
+              {batchProgress.current && batchProgress.phase !== "done" ? (
+                <p className="text-xs text-[var(--muted)] break-all">当前：{batchProgress.current}</p>
               ) : null}
-              {updateProgress.done && !updateProgress.error && updateProgress.resultVersion ? (
-                <p className="text-sm text-teal-700">当前版本：{updateProgress.resultVersion}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
+                <div>已检测：{batchProgress.checked}/{batchProgress.total || "—"}</div>
+                <div>需更新：{batchProgress.needUpdate}</div>
+                <div className="text-teal-700">成功更新：{batchProgress.updated}</div>
+                <div className={batchProgress.failed ? "text-[var(--danger)]" : ""}>
+                  失败：{batchProgress.failed}
+                  {batchProgress.unreachable ? ` · 无法检测 ${batchProgress.unreachable}` : ""}
+                </div>
+              </div>
+              {batchProgress.errors.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--line)] bg-black/[0.02] p-2 text-xs text-[var(--danger)] space-y-1">
+                  {batchProgress.errors.slice(0, 30).map((err) => (
+                    <p key={err}>{err}</p>
+                  ))}
+                  {batchProgress.errors.length > 30 ? (
+                    <p>…另有 {batchProgress.errors.length - 30} 条</p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
-            {updateProgress.done ? (
+            {batchProgress.phase === "done" ? (
               <div className="flex justify-end">
                 <button
                   type="button"
                   className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm"
-                  onClick={() => setUpdateProgress(null)}
+                  onClick={() => setBatchProgress(null)}
                 >
                   关闭
                 </button>
               </div>
             ) : (
-              <p className="text-xs text-[var(--muted)]">更新过程中请勿关闭页面…</p>
+              <p className="text-xs text-[var(--muted)]">进行中请勿关闭页面…</p>
             )}
           </div>
         </div>
