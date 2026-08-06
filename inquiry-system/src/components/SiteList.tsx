@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
 import type { SiteListTab, SiteSortField, SortDir } from "@/lib/list-tabs";
+import { compareSemver } from "@/lib/semver";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
 
 export type SiteRow = {
@@ -56,10 +57,26 @@ const emptyForm = {
   enabled: true,
 };
 
+type PluginVerState =
+  | { status: "loading" }
+  | { status: "ok"; version: string }
+  | { status: "error"; error: string };
+
+type UpdateProgress = {
+  siteId: string;
+  domain: string;
+  percent: number;
+  label: string;
+  done?: boolean;
+  error?: string;
+  resultVersion?: string;
+};
+
 export function SiteList({
   initialSites,
   clients,
   ingestUrl,
+  latestPluginVersion,
   filters,
   tab,
   tabs,
@@ -67,6 +84,7 @@ export function SiteList({
   initialSites: SiteRow[];
   clients: ClientOpt[];
   ingestUrl: string;
+  latestPluginVersion: string;
   filters: {
     clientId: string;
     q: string;
@@ -85,6 +103,8 @@ export function SiteList({
   const [configSite, setConfigSite] = useState<SiteRow | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [pluginVers, setPluginVers] = useState<Record<string, PluginVerState>>({});
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
 
   function buildHref(overrides: Record<string, string | null | undefined> = {}) {
     const p = new URLSearchParams();
@@ -184,11 +204,11 @@ export function SiteList({
         alert(data.error || "无法进入后台");
         return;
       }
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = data.loginUrl;
-      form.target = "_blank";
-      form.acceptCharset = "UTF-8";
+      const formEl = document.createElement("form");
+      formEl.method = "POST";
+      formEl.action = data.loginUrl;
+      formEl.target = "_blank";
+      formEl.acceptCharset = "UTF-8";
       const fields: Record<string, string> = {
         log: data.username,
         pwd: data.password,
@@ -201,42 +221,198 @@ export function SiteList({
         input.type = "hidden";
         input.name = name;
         input.value = value;
-        form.appendChild(input);
+        formEl.appendChild(input);
       }
-      document.body.appendChild(form);
-      form.submit();
-      form.remove();
+      document.body.appendChild(formEl);
+      formEl.submit();
+      formEl.remove();
     } finally {
       setBusy(false);
     }
   }
 
-  async function updatePlugin(s: SiteRow) {
+  useEffect(() => {
+    let cancelled = false;
+    const sites = initialSites;
+    const ids = sites.map((s) => s.id);
+    setPluginVers((prev) => {
+      const next: Record<string, PluginVerState> = {};
+      for (const id of ids) {
+        next[id] = { status: "loading" };
+      }
+      // keep unrelated cached entries out of current tab
+      return next;
+    });
+
+    void (async () => {
+      await Promise.all(
+        sites.map(async (s) => {
+          try {
+            const res = await fetch(`/api/admin/sites/${s.id}/plugin-version`, {
+              cache: "no-store",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (cancelled) return;
+            if (data.ok && data.version) {
+              setPluginVers((prev) => ({
+                ...prev,
+                [s.id]: { status: "ok", version: String(data.version) },
+              }));
+            } else {
+              setPluginVers((prev) => ({
+                ...prev,
+                [s.id]: {
+                  status: "error",
+                  error: String(data.error || "无法获取版本"),
+                },
+              }));
+            }
+          } catch (e) {
+            if (cancelled) return;
+            setPluginVers((prev) => ({
+              ...prev,
+              [s.id]: {
+                status: "error",
+                error: e instanceof Error ? e.message : "检测失败",
+              },
+            }));
+          }
+        }),
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // 仅按当前列表站点 id 集合刷新检测
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSites.map((s) => s.id).join(",")]);
+
+  async function updatePluginFromVersion(s: SiteRow) {
+    if (!s.hasWpCredentials) {
+      alert("请先在编辑中配置后台入口、用户名和密码，再更新插件。");
+      return;
+    }
     if (
       !confirm(
-        `向「${s.domain}」推送中心最新插件？\n需该站已安装 Inquiry Bridge（含自更新），且 site_key 配置正确。`,
+        `将「${s.domain}」的插件更新到中心最新版${latestPluginVersion ? ` ${latestPluginVersion}` : ""}？`,
       )
     ) {
       return;
     }
+
     setBusy(true);
+    setUpdateProgress({
+      siteId: s.id,
+      domain: s.domain,
+      percent: 8,
+      label: "正在连接站点…",
+    });
+
+    const steps = [
+      { at: 1200, percent: 28, label: "正在校验 site_key…" },
+      { at: 2800, percent: 48, label: "正在下载最新插件包…" },
+      { at: 5200, percent: 72, label: "正在覆盖安装…" },
+      { at: 8000, percent: 88, label: "即将完成，请稍候…" },
+    ];
+    const timers = steps.map((step) =>
+      window.setTimeout(() => {
+        setUpdateProgress((prev) =>
+          prev && prev.siteId === s.id && !prev.done && !prev.error
+            ? { ...prev, percent: Math.max(prev.percent, step.percent), label: step.label }
+            : prev,
+        );
+      }, step.at),
+    );
+
     try {
       const res = await fetch(`/api/admin/sites/${s.id}/update-plugin`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
+      timers.forEach((t) => window.clearTimeout(t));
       if (!res.ok) {
-        alert(data.error || "更新失败");
+        setUpdateProgress({
+          siteId: s.id,
+          domain: s.domain,
+          percent: 100,
+          label: "更新失败",
+          done: true,
+          error: data.error || "更新失败",
+        });
         return;
       }
       const remoteVer =
-        typeof data.remote?.version === "string" ? data.remote.version : "";
-      alert(
-        `已触发更新${data.latestVersion ? `（中心版本 ${data.latestVersion}` : ""}${
-          remoteVer ? `，远程 ${remoteVer}` : ""
-        }${data.latestVersion || remoteVer ? "）" : ""}`,
-      );
+        typeof data.remote?.version === "string"
+          ? data.remote.version
+          : typeof data.latestVersion === "string"
+            ? data.latestVersion
+            : latestPluginVersion;
+      setUpdateProgress({
+        siteId: s.id,
+        domain: s.domain,
+        percent: 100,
+        label: "更新完成",
+        done: true,
+        resultVersion: remoteVer,
+      });
+      if (remoteVer) {
+        setPluginVers((prev) => ({
+          ...prev,
+          [s.id]: { status: "ok", version: remoteVer },
+        }));
+      }
+    } catch (e) {
+      timers.forEach((t) => window.clearTimeout(t));
+      setUpdateProgress({
+        siteId: s.id,
+        domain: s.domain,
+        percent: 100,
+        label: "更新失败",
+        done: true,
+        error: e instanceof Error ? e.message : "更新失败",
+      });
     } finally {
       setBusy(false);
     }
+  }
+
+  function renderPluginVersionCell(s: SiteRow) {
+    const st = pluginVers[s.id];
+    if (!st || st.status === "loading") {
+      return <span className="text-xs text-[var(--muted)]">检测中…</span>;
+    }
+    if (st.status === "error") {
+      return (
+        <span className="text-xs text-[var(--muted)]" title={st.error}>
+          未知
+        </span>
+      );
+    }
+    const outdated =
+      Boolean(latestPluginVersion) && compareSemver(st.version, latestPluginVersion) < 0;
+    if (outdated) {
+      return (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => updatePluginFromVersion(s)}
+          className="text-left disabled:opacity-50"
+          title={`当前 ${st.version}，最新 ${latestPluginVersion}，点击更新`}
+        >
+          <span className="text-[var(--brand)] font-medium underline underline-offset-2">
+            {st.version}
+          </span>
+          <span className="block text-[10px] text-amber-700 mt-0.5">可更新 → {latestPluginVersion}</span>
+        </button>
+      );
+    }
+    return (
+      <span className="text-xs" title={latestPluginVersion ? `已是最新（${latestPluginVersion}）` : ""}>
+        {st.version}
+        {latestPluginVersion && compareSemver(st.version, latestPluginVersion) >= 0 ? (
+          <span className="ml-1 text-[10px] text-teal-700">最新</span>
+        ) : null}
+      </span>
+    );
   }
 
   const showModal = creating || !!editing;
@@ -337,7 +513,7 @@ export function SiteList({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[980px]">
+        <table className="w-full text-sm min-w-[1080px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">域名</th>
@@ -356,6 +532,21 @@ export function SiteList({
               <th className="px-3 py-2" title="是否接受该站 WordPress 插件推送的询盘">
                 对接状态
               </th>
+              <th
+                className="px-3 py-2"
+                title={
+                  latestPluginVersion
+                    ? `中心最新插件 ${latestPluginVersion}；非最新可点击版本号更新`
+                    : "各站 Inquiry Bridge 插件版本"
+                }
+              >
+                插件版本
+                {latestPluginVersion ? (
+                  <span className="block text-[10px] font-normal text-[var(--muted)]">
+                    最新 {latestPluginVersion}
+                  </span>
+                ) : null}
+              </th>
               <th className="px-3 py-2">
                 <Link href={sortHref("formCount")} className="hover:text-[var(--ink)]" title="按表单数排序">
                   表单数{sortMark("formCount")}
@@ -367,7 +558,7 @@ export function SiteList({
           <tbody>
             {initialSites.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={9} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -410,29 +601,19 @@ export function SiteList({
                       </span>
                     )}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap">{renderPluginVersionCell(s)}</td>
                   <td className="px-3 py-2">{s.formCount}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                     {s.hasWpCredentials ? (
-                      <>
-                        <button
-                          type="button"
-                          className="text-[var(--brand)]"
-                          disabled={busy}
-                          onClick={() => enterWpAdmin(s)}
-                          title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
-                        >
-                          进入后台
-                        </button>
-                        <button
-                          type="button"
-                          className="text-[var(--brand)]"
-                          disabled={busy}
-                          onClick={() => updatePlugin(s)}
-                          title="通过插件自更新接口拉取中心最新 zip"
-                        >
-                          更新插件
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        className="text-[var(--brand)]"
+                        disabled={busy}
+                        onClick={() => enterWpAdmin(s)}
+                        title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
+                      >
+                        进入后台
+                      </button>
                     ) : null}
                     <button
                       type="button"
@@ -459,6 +640,45 @@ export function SiteList({
           </tbody>
         </table>
       </div>
+
+      {updateProgress ? (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-lg space-y-4">
+            <h3 className="text-base font-semibold">更新插件</h3>
+            <p className="text-sm text-[var(--muted)] break-all">{updateProgress.domain}</p>
+            <div className="space-y-2">
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    updateProgress.error ? "bg-[var(--danger)]" : "bg-[var(--brand)]"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, updateProgress.percent))}%` }}
+                />
+              </div>
+              <p className="text-sm text-[var(--ink)]">{updateProgress.label}</p>
+              {updateProgress.error ? (
+                <p className="text-sm text-[var(--danger)] whitespace-pre-wrap">{updateProgress.error}</p>
+              ) : null}
+              {updateProgress.done && !updateProgress.error && updateProgress.resultVersion ? (
+                <p className="text-sm text-teal-700">当前版本：{updateProgress.resultVersion}</p>
+              ) : null}
+            </div>
+            {updateProgress.done ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm"
+                  onClick={() => setUpdateProgress(null)}
+                >
+                  关闭
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--muted)]">更新过程中请勿关闭页面…</p>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {showModal ? (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">

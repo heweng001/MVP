@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
 import { parseMailHiddenFields } from "@/lib/mail-hidden-config";
 import { hasWpRemoteCreds } from "@/lib/site-credentials";
+import { readPluginVersion } from "@/lib/plugin-meta";
 import {
   SITE_LIST_TABS,
   parseSiteListTab,
@@ -131,6 +132,13 @@ export default async function SitesPage({
     order,
   );
 
+  let latestPluginVersion = "";
+  try {
+    latestPluginVersion = await readPluginVersion();
+  } catch {
+    latestPluginVersion = "";
+  }
+
   return (
     <div>
       <PageHeader
@@ -139,7 +147,7 @@ export default async function SitesPage({
           <div className="space-y-1.5">
             <p>管理客户下属网站；右侧「配置对接」按步骤安装插件并完成收件配置。</p>
             <p>
-              可在网站中填写 WP 后台入口与账号；配置齐全后可「进入后台」或「更新插件」（自更新需插件 ≥1.0.13）。
+              「插件版本」列可查看各站 Inquiry Bridge 版本；非最新时可点击更新（需已配置运维账号，插件 ≥1.0.13）。
             </p>
             <p>
               未到期网站按类型分「SEO型 / 展示型」；结束日早于今天归入「到期」。
@@ -152,6 +160,7 @@ export default async function SitesPage({
       />
       <SiteList
         ingestUrl={`${appUrl()}/api/ingest`}
+        latestPluginVersion={latestPluginVersion}
         filters={{ clientId, q, enabled, tab, sort, order }}
         tab={tab}
         tabs={SITE_LIST_TABS.map((t) => ({
