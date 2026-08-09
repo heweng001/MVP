@@ -70,9 +70,6 @@ export default async function ClientsPage({
     include: {
       sites: { select: { siteType: true } },
       _count: { select: { sites: true } },
-      promo: {
-        select: { id: true, lastSubmittedBy: true, lastSubmittedAt: true },
-      },
     },
   });
 
@@ -99,13 +96,6 @@ export default async function ClientsPage({
         serviceEnd: x.client.serviceEnd?.toISOString() ?? null,
         lastVisitAt: x.client.lastVisitAt?.toISOString() ?? null,
         _count: x.client._count,
-        promo: x.client.promo
-          ? {
-              id: x.client.promo.id,
-              lastSubmittedBy: x.client.promo.lastSubmittedBy,
-              lastSubmittedAt: x.client.promo.lastSubmittedAt?.toISOString() ?? null,
-            }
-          : null,
       })),
     sort,
     order,

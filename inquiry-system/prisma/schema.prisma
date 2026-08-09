@@ -28,23 +28,23 @@ model Client {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sites        Site[]
-  promo        ClientPromo?
 }
 
-/// 客户信息核对（与客户一对一）
+/// 信息核对（可关联一个网站；一站至多一条）
 model ClientPromo {
   id               String    @id @default(cuid())
-  clientId         String    @unique
-  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  /// 关键词列表（客户可见）
+  /// 可选关联网站；唯一，保证一站一条
+  siteId           String?   @unique
+  site             Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  /// 关键词列表（客户可见，一行一个；另页编辑）
   keywords         String    @default("")
   /// 关键词内部备注（仅后台）
   keywordsNote     String    @default("")
-  /// 公司产品要点（客户可见）
+  /// 公司产品要点（客户可见，HTML 图文）
   productPoints    String    @default("")
   /// 产品要点内部备注（仅后台）
   productPointsNote String   @default("")
-  /// 广告要点（客户可见）
+  /// 广告要点（客户可见，HTML 图文）
   adPoints         String    @default("")
   /// 广告要点内部备注（仅后台）
   adPointsNote     String    @default("")
@@ -95,6 +95,7 @@ model Site {
   forms           FormMailConfig[]
   inquiries       Inquiry[]
   blacklist       BlacklistEntry[]
+  promo           ClientPromo?
 
   @@index([clientId])
   @@index([siteType])

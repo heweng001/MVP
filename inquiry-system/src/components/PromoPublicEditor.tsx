@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { PROMO_TABS, type PromoTabKey } from "@/lib/promo";
+import Link from "next/link";
+import { PROMO_TABS, countKeywordLines, type PromoTabKey } from "@/lib/promo";
+import { PromoRichEditor } from "@/components/promo/PromoRichEditor";
 
 export function PromoPublicEditor({
   token,
-  clientName,
+  displayLabel,
   expiresAt,
   initial,
 }: {
   token: string;
-  clientName: string;
+  displayLabel: string;
   expiresAt: string | null;
   initial: {
     keywords: string;
@@ -18,8 +20,7 @@ export function PromoPublicEditor({
     adPoints: string;
   };
 }) {
-  const [tab, setTab] = useState<PromoTabKey>("keywords");
-  const [keywords, setKeywords] = useState(initial.keywords);
+  const [tab, setTab] = useState<Exclude<PromoTabKey, "keywords">>("productPoints");
   const [productPoints, setProductPoints] = useState(initial.productPoints);
   const [adPoints, setAdPoints] = useState(initial.adPoints);
   const [submitterName, setSubmitterName] = useState("");
@@ -27,16 +28,7 @@ export function PromoPublicEditor({
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
 
-  const values: Record<PromoTabKey, string> = {
-    keywords,
-    productPoints,
-    adPoints,
-  };
-  const setters: Record<PromoTabKey, (v: string) => void> = {
-    keywords: setKeywords,
-    productPoints: setProductPoints,
-    adPoints: setAdPoints,
-  };
+  const keywordLines = countKeywordLines(initial.keywords);
 
   async function submit() {
     setBusy(true);
@@ -45,7 +37,6 @@ export function PromoPublicEditor({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        keywords,
         productPoints,
         adPoints,
         submitterName,
@@ -74,19 +65,34 @@ export function PromoPublicEditor({
       <div>
         <h1 className="text-xl font-semibold">填写信息核对</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          客户：{clientName}
+          {displayLabel}
           {expiresAt ? (
             <span className="ml-2">· 请于 {new Date(expiresAt).toLocaleString("zh-CN")} 前提交</span>
           ) : null}
         </p>
       </div>
 
+      <div className="rounded-xl border border-[var(--line)] bg-black/[0.02] p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          <div className="font-medium">关键词列表</div>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
+            点进另页编辑 · 当前 {keywordLines} 行
+          </p>
+        </div>
+        <Link
+          href={`/p/${token}/keywords`}
+          className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm"
+        >
+          编辑关键词
+        </Link>
+      </div>
+
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
-        {PROMO_TABS.map((t) => (
+        {PROMO_TABS.filter((t) => t.key !== "keywords").map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(t.key as Exclude<PromoTabKey, "keywords">)}
             className={`px-3 py-2 text-sm rounded-t-lg ${
               tab === t.key
                 ? "bg-white border border-[var(--line)] border-b-white -mb-px font-medium"
@@ -99,17 +105,20 @@ export function PromoPublicEditor({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl p-4 space-y-3">
-        <label className="block text-sm space-y-1">
+        <div className="space-y-1">
           <span className="text-xs text-[var(--muted)]">
             {PROMO_TABS.find((t) => t.key === tab)?.label}
           </span>
-          <textarea
-            value={values[tab]}
-            onChange={(e) => setters[tab](e.target.value)}
-            className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm min-h-[200px]"
-            placeholder="请填写本页内容，切换页签可编辑其它内容"
-          />
-        </label>
+          {tab === "productPoints" ? (
+            <PromoRichEditor
+              key="productPoints"
+              value={productPoints}
+              onChange={setProductPoints}
+            />
+          ) : (
+            <PromoRichEditor key="adPoints" value={adPoints} onChange={setAdPoints} />
+          )}
+        </div>
         <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--muted)]">您的姓名（提交必填）</span>
           <input
@@ -126,7 +135,7 @@ export function PromoPublicEditor({
           onClick={submit}
           className="bg-[var(--brand)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
         >
-          {busy ? "提交中…" : "提交全部内容"}
+          {busy ? "提交中…" : "提交产品/广告要点"}
         </button>
         {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
       </div>

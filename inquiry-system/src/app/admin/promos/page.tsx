@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PromoList } from "@/components/PromoList";
 import { PageHeader } from "@/components/PageHeader";
+import { promoEditUrl } from "@/lib/promo";
 
 export default async function PromosPage({
   searchParams,
@@ -10,23 +11,29 @@ export default async function PromosPage({
   const sp = await searchParams;
   const q = (sp.q || "").trim();
 
-  const [promos, clients] = await Promise.all([
-    prisma.clientPromo.findMany({
-      where: q
-        ? {
-            client: { name: { contains: q } },
-          }
-        : undefined,
-      orderBy: { updatedAt: "desc" },
-      include: { client: { select: { id: true, name: true } } },
-    }),
-    prisma.client.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, promo: { select: { id: true } } },
-    }),
-  ]);
+  const promos = await prisma.clientPromo.findMany({
+    where: q
+      ? {
+          OR: [
+            { id: { contains: q } },
+            { site: { domain: { contains: q } } },
+            { site: { client: { name: { contains: q } } } },
+          ],
+        }
+      : undefined,
+    orderBy: { updatedAt: "desc" },
+    include: {
+      site: {
+        select: {
+          id: true,
+          domain: true,
+          client: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
 
-  const without = clients.filter((c) => !c.promo).map((c) => ({ id: c.id, name: c.name }));
+  const now = Date.now();
 
   return (
     <div>
@@ -34,22 +41,29 @@ export default async function PromosPage({
         title="信息核对"
         hint={
           <div className="space-y-1.5">
-            <p>与客户一对一。可新增、查找、编辑；可发送 7 天有效编辑链接给客户。</p>
-            <p>三个页签：关键词列表、公司产品要点、广告要点；各页「内部备注」仅后台可见。</p>
-            <p>详情页可查看历次更新人与时间。</p>
+            <p>可随意新建；系统自动生成 ID。可选关联一个网站（一站仅一条）。</p>
+            <p>关键词另页编辑；产品/广告要点支持图文与表格。内部备注仅后台可见。</p>
+            <p>列表可生成/复制 7 天有效客户编辑链接。</p>
           </div>
         }
       />
       <PromoList
         initialQ={q}
-        items={promos.map((p) => ({
-          id: p.id,
-          lastSubmittedBy: p.lastSubmittedBy,
-          lastSubmittedAt: p.lastSubmittedAt?.toISOString() ?? null,
-          updatedAt: p.updatedAt.toISOString(),
-          client: p.client,
-        }))}
-        clientsWithoutPromo={without}
+        items={promos.map((p) => {
+          const linkValid =
+            !!p.editToken &&
+            !!p.editTokenExpires &&
+            p.editTokenExpires.getTime() > now;
+          return {
+            id: p.id,
+            lastSubmittedBy: p.lastSubmittedBy,
+            lastSubmittedAt: p.lastSubmittedAt?.toISOString() ?? null,
+            updatedAt: p.updatedAt.toISOString(),
+            editUrl: linkValid && p.editToken ? promoEditUrl(p.editToken) : null,
+            editTokenExpires: linkValid ? p.editTokenExpires!.toISOString() : null,
+            site: p.site,
+          };
+        })}
       />
     </div>
   );

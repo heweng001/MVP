@@ -87,6 +87,13 @@ export default async function SitesPage({
     include: {
       client: true,
       forms: true,
+      promo: {
+        select: {
+          id: true,
+          lastSubmittedBy: true,
+          lastSubmittedAt: true,
+        },
+      },
       _count: { select: { forms: true } },
     },
   });
@@ -109,6 +116,13 @@ export default async function SitesPage({
     enabled: s.enabled,
     clientId: s.clientId,
     clientName: s.client.name,
+    promo: s.promo
+      ? {
+          id: s.promo.id,
+          lastSubmittedBy: s.promo.lastSubmittedBy,
+          lastSubmittedAt: s.promo.lastSubmittedAt?.toISOString() ?? null,
+        }
+      : null,
     forms: s.forms.map((f) => ({
       id: f.id,
       formId: f.formId,
@@ -151,7 +165,7 @@ export default async function SitesPage({
             <p>
               未到期网站按类型分「SEO型 / 展示型」；结束日早于今天归入「到期」。列表默认按结束日期升序，同客户多域名默认折叠。
             </p>
-            <p>分层（重点/正常/维护）在列表展示；站点类型仍可在编辑中修改，用于页签与邮件门控。</p>
+            <p>分层（重点/正常/维护）在列表展示；若已关联信息核对，显示最近更新人与时间。</p>
           </div>
         }
       />

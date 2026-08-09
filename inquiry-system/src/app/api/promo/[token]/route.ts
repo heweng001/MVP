@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  dedupeKeywords,
   getPromoByEditToken,
   isEditTokenValid,
+  promoDisplayLabel,
   recordPromoHistory,
+  sanitizePromoHtml,
 } from "@/lib/promo";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -15,11 +18,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "链接无效" }, { status: 404 });
   }
   const valid = isEditTokenValid(promo.editTokenExpires);
-  // 不返回内部备注字段
+  if (!valid) {
+    return NextResponse.json({ error: "链接已过期" }, { status: 410 });
+  }
   return NextResponse.json({
-    valid,
-    expired: !valid,
-    clientName: promo.client.name,
+    displayLabel: promoDisplayLabel(promo),
     expiresAt: promo.editTokenExpires?.toISOString() ?? null,
     keywords: promo.keywords,
     productPoints: promo.productPoints,
@@ -34,33 +37,52 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "链接无效" }, { status: 404 });
   }
   if (!isEditTokenValid(promo.editTokenExpires)) {
-    return NextResponse.json(
-      { error: "编辑链接已过期（超过 7 天），请联系管理员重新发送" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "链接已过期" }, { status: 410 });
   }
 
   const body = await req.json().catch(() => ({}));
   const submitterName = String(body.submitterName || "").trim();
   if (!submitterName) {
-    return NextResponse.json({ error: "请填写您的姓名后再提交" }, { status: 400 });
+    return NextResponse.json({ error: "请填写姓名" }, { status: 400 });
   }
 
-  // 客户仅可更新可见字段，忽略任何 note 字段
+  if (body.onlyKeywords) {
+    if (body.keywords === undefined) {
+      return NextResponse.json({ error: "缺少关键词内容" }, { status: 400 });
+    }
+    const deduped = dedupeKeywords(String(body.keywords));
+    await prisma.clientPromo.update({
+      where: { id: promo.id },
+      data: { keywords: deduped.text },
+    });
+    await recordPromoHistory(promo.id, submitterName);
+    return NextResponse.json({
+      ok: true,
+      keywordDedupe: {
+        before: deduped.before,
+        after: deduped.after,
+        removed: deduped.removed,
+      },
+    });
+  }
+
+  const keywords =
+    body.keywords !== undefined ? dedupeKeywords(String(body.keywords)).text : promo.keywords;
+
   await prisma.clientPromo.update({
     where: { id: promo.id },
     data: {
-      keywords: body.keywords !== undefined ? String(body.keywords) : promo.keywords,
+      keywords,
       productPoints:
-        body.productPoints !== undefined ? String(body.productPoints) : promo.productPoints,
-      adPoints: body.adPoints !== undefined ? String(body.adPoints) : promo.adPoints,
+        body.productPoints !== undefined
+          ? sanitizePromoHtml(String(body.productPoints))
+          : promo.productPoints,
+      adPoints:
+        body.adPoints !== undefined
+          ? sanitizePromoHtml(String(body.adPoints))
+          : promo.adPoints,
     },
   });
   await recordPromoHistory(promo.id, submitterName);
-
-  return NextResponse.json({
-    ok: true,
-    lastSubmittedBy: submitterName,
-    lastSubmittedAt: new Date().toISOString(),
-  });
+  return NextResponse.json({ ok: true });
 }

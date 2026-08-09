@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PromoEditor } from "@/components/PromoEditor";
 import { PageHeader } from "@/components/PageHeader";
-import { promoEditUrl } from "@/lib/promo";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,16 +11,39 @@ export default async function PromoDetailPage({ params }: Ctx) {
   const item = await prisma.clientPromo.findUnique({
     where: { id },
     include: {
-      client: true,
+      site: {
+        select: {
+          id: true,
+          domain: true,
+          client: { select: { id: true, name: true } },
+        },
+      },
       histories: { orderBy: { createdAt: "desc" }, take: 100 },
     },
   });
   if (!item) notFound();
 
-  const linkValid =
-    !!item.editToken &&
-    !!item.editTokenExpires &&
-    item.editTokenExpires.getTime() > Date.now();
+  const takenSiteIds = (
+    await prisma.clientPromo.findMany({
+      where: { siteId: { not: null }, NOT: { id: item.id } },
+      select: { siteId: true },
+    })
+  )
+    .map((p) => p.siteId)
+    .filter((x): x is string => Boolean(x));
+
+  const taken = new Set(takenSiteIds);
+  const allSites = await prisma.site.findMany({
+    orderBy: { domain: "asc" },
+    include: { client: { select: { name: true } } },
+  });
+  const siteOptions = allSites
+    .filter((s) => s.id === item.siteId || !taken.has(s.id))
+    .map((s) => ({
+      id: s.id,
+      domain: s.domain,
+      clientName: s.client.name,
+    }));
 
   return (
     <div className="space-y-4">
@@ -35,14 +57,15 @@ export default async function PromoDetailPage({ params }: Ctx) {
         <div className="mt-2 -mb-2">
           <PageHeader
             title="信息核对详情"
-            hint={`客户：${item.client.name}。可编辑三页签内容并发送 7 天有效编辑链接；内部备注仅后台可见。`}
+            hint="可关联一个网站；产品/广告要点支持图文与表格。客户编辑链接请在列表页生成/复制。"
           />
         </div>
       </div>
       <PromoEditor
-        defaultEmail=""
+        siteOptions={siteOptions}
         initial={{
           id: item.id,
+          siteId: item.siteId,
           keywords: item.keywords,
           productPoints: item.productPoints,
           adPoints: item.adPoints,
@@ -51,9 +74,7 @@ export default async function PromoDetailPage({ params }: Ctx) {
           adPointsNote: item.adPointsNote,
           lastSubmittedBy: item.lastSubmittedBy,
           lastSubmittedAt: item.lastSubmittedAt?.toISOString() ?? null,
-          editTokenExpires: linkValid ? item.editTokenExpires!.toISOString() : null,
-          editUrl: linkValid && item.editToken ? promoEditUrl(item.editToken) : null,
-          client: { id: item.client.id, name: item.client.name },
+          site: item.site,
           histories: item.histories.map((h) => ({
             id: h.id,
             submittedBy: h.submittedBy,

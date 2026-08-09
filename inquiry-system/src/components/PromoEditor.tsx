@@ -1,14 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PROMO_TABS, type PromoNoteKey, type PromoTabKey } from "@/lib/promo";
+import { PROMO_TABS, countKeywordLines, type PromoNoteKey, type PromoTabKey } from "@/lib/promo";
 import { formatDateTime } from "@/lib/labels";
+import { PromoRichEditor } from "@/components/promo/PromoRichEditor";
 
 type HistoryRow = { id: string; submittedBy: string; createdAt: string };
 
+type SiteOpt = {
+  id: string;
+  domain: string;
+  clientName: string;
+};
+
 type PromoData = {
   id: string;
+  siteId: string | null;
   keywords: string;
   productPoints: string;
   adPoints: string;
@@ -17,54 +26,38 @@ type PromoData = {
   adPointsNote: string;
   lastSubmittedBy: string;
   lastSubmittedAt: string | null;
-  editTokenExpires: string | null;
-  editUrl: string | null;
-  client: { id: string; name: string };
+  site: { id: string; domain: string; client: { id: string; name: string } } | null;
   histories: HistoryRow[];
 };
 
 export function PromoEditor({
   initial,
-  defaultEmail = "",
+  siteOptions,
 }: {
   initial: PromoData;
-  defaultEmail?: string;
+  siteOptions: SiteOpt[];
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<PromoTabKey>("keywords");
-  const [keywords, setKeywords] = useState(initial.keywords);
+  const [tab, setTab] = useState<PromoTabKey>("productPoints");
+  const [siteId, setSiteId] = useState(initial.siteId || "");
   const [productPoints, setProductPoints] = useState(initial.productPoints);
   const [adPoints, setAdPoints] = useState(initial.adPoints);
-  const [keywordsNote, setKeywordsNote] = useState(initial.keywordsNote);
   const [productPointsNote, setProductPointsNote] = useState(initial.productPointsNote);
   const [adPointsNote, setAdPointsNote] = useState(initial.adPointsNote);
   const [histories, setHistories] = useState(initial.histories);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [editUrl, setEditUrl] = useState(initial.editUrl);
-  const [expiresAt, setExpiresAt] = useState(initial.editTokenExpires);
-  const [sendTo, setSendTo] = useState(defaultEmail);
   const [lastBy, setLastBy] = useState(initial.lastSubmittedBy);
   const [lastAt, setLastAt] = useState(initial.lastSubmittedAt);
 
-  const values: Record<PromoTabKey, string> = {
-    keywords,
-    productPoints,
-    adPoints,
-  };
-  const setters: Record<PromoTabKey, (v: string) => void> = {
-    keywords: setKeywords,
-    productPoints: setProductPoints,
-    adPoints: setAdPoints,
-  };
-  const notes: Record<PromoNoteKey, string> = {
-    keywordsNote,
+  const keywordLines = countKeywordLines(initial.keywords);
+
+  const notes: Partial<Record<PromoNoteKey, string>> = {
     productPointsNote,
     adPointsNote,
   };
-  const noteSetters: Record<PromoNoteKey, (v: string) => void> = {
-    keywordsNote: setKeywordsNote,
+  const noteSetters: Partial<Record<PromoNoteKey, (v: string) => void>> = {
     productPointsNote: setProductPointsNote,
     adPointsNote: setAdPointsNote,
   };
@@ -79,10 +72,9 @@ export function PromoEditor({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        keywords,
+        siteId: siteId || null,
         productPoints,
         adPoints,
-        keywordsNote,
         productPointsNote,
         adPointsNote,
         submitterName: "管理员",
@@ -105,65 +97,71 @@ export function PromoEditor({
         })),
       );
     }
-    setMsg("已保存");
+    setMsg("已提交");
     router.refresh();
   }
 
-  async function issueLink(send: boolean) {
-    setBusy(true);
-    setMsg(null);
-    setErr(null);
-    const res = await fetch(`/api/admin/promos/${initial.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: send ? "send_link" : "issue_link",
-        to: sendTo,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (data.editUrl) {
-      setEditUrl(data.editUrl);
-      setExpiresAt(data.expiresAt || null);
-    }
-    if (!res.ok) {
-      setErr(data.error || "操作失败");
-      return;
-    }
-    if (send) setMsg(`编辑链接已发送至 ${sendTo.trim()}`);
-    else setMsg("已生成 7 天有效编辑链接，可复制发给客户");
-    router.refresh();
-  }
-
-  async function copyLink() {
-    if (!editUrl) {
-      await issueLink(false);
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(editUrl);
-      setMsg("链接已复制到剪贴板");
-    } catch {
-      setErr("复制失败，请手动选择链接复制");
-    }
+  function cancel() {
+    router.push("/admin/promos");
   }
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="text-sm text-[var(--muted)]">
-        客户：<strong className="text-[var(--ink)]">{initial.client.name}</strong>
+      <div className="text-sm text-[var(--muted)] flex flex-wrap gap-x-3 gap-y-1">
+        <span>
+          ID：<code className="text-[var(--ink)] text-xs">{initial.id}</code>
+        </span>
+        {initial.site ? (
+          <span>
+            网站：
+            <strong className="text-[var(--ink)]">{initial.site.domain}</strong>
+          </span>
+        ) : null}
         {lastBy || lastAt ? (
-          <span className="ml-3">
+          <span>
             最近更新：{lastBy || "—"} · {formatDateTime(lastAt)}
           </span>
         ) : (
-          <span className="ml-3">尚未有人更新</span>
+          <span>尚未有人更新</span>
         )}
       </div>
 
+      <div className="bg-white border border-[var(--line)] rounded-xl p-4">
+        <label className="text-sm block">
+          <span className="text-xs text-[var(--muted)]">关联网站（一站一条，可空）</span>
+          <select
+            value={siteId}
+            onChange={(e) => setSiteId(e.target.value)}
+            className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+          >
+            <option value="">不关联</option>
+            {siteOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.domain}
+                {s.clientName ? ` · ${s.clientName}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="bg-white border border-[var(--line)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          <div className="font-medium">关键词列表</div>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
+            另页编辑 · 当前 {keywordLines} 行 · 客户链接请在列表页生成/复制
+          </p>
+        </div>
+        <Link
+          href={`/admin/promos/${initial.id}/keywords`}
+          className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm"
+        >
+          编辑关键词
+        </Link>
+      </div>
+
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
-        {PROMO_TABS.map((t) => (
+        {PROMO_TABS.filter((t) => t.key !== "keywords").map((t) => (
           <button
             key={t.key}
             type="button"
@@ -180,84 +178,43 @@ export function PromoEditor({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl p-4 -mt-px space-y-3">
-        <label className="block text-sm space-y-1">
+        <div className="space-y-1">
           <span className="text-xs text-[var(--muted)]">{currentTab.label}（客户可见）</span>
-          <textarea
-            value={values[tab]}
-            onChange={(e) => setters[tab](e.target.value)}
-            className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm min-h-[180px]"
-            placeholder="客户可看到并编辑的内容…"
-          />
-        </label>
+          {tab === "productPoints" ? (
+            <PromoRichEditor
+              key="productPoints"
+              value={productPoints}
+              onChange={setProductPoints}
+            />
+          ) : (
+            <PromoRichEditor key="adPoints" value={adPoints} onChange={setAdPoints} />
+          )}
+        </div>
         <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--warn)]">内部备注（仅后台可见，客户链接看不到）</span>
           <textarea
-            value={notes[currentTab.noteKey]}
-            onChange={(e) => noteSetters[currentTab.noteKey](e.target.value)}
+            value={notes[currentTab.noteKey] || ""}
+            onChange={(e) => noteSetters[currentTab.noteKey]?.(e.target.value)}
             className="w-full border border-[var(--warn)]/40 bg-[var(--warn)]/5 rounded-lg px-3 py-2 text-sm min-h-[100px]"
             placeholder="内部备注，不会出现在客户编辑页…"
           />
         </label>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={save}
-          className="bg-[var(--brand)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
-        >
-          保存全部页签
-        </button>
-      </div>
-
-      <div className="bg-white border border-[var(--line)] rounded-xl p-4 space-y-3">
-        <div className="text-sm font-medium">客户编辑链接（有效期 7 天）</div>
-        <p className="text-xs text-[var(--muted)]">
-          客户只能编辑三个页签的正文，看不到内部备注。提交时须填写姓名。
-        </p>
-        {editUrl ? (
-          <div className="text-xs break-all bg-black/[0.03] rounded-lg px-3 py-2 border border-[var(--line)]">
-            {editUrl}
-            {expiresAt ? (
-              <div className="mt-1 text-[var(--muted)]">有效期至 {formatDateTime(expiresAt)}</div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-xs text-[var(--warn)]">尚未生成有效链接</p>
-        )}
-        <div className="flex flex-wrap gap-2 items-end">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={busy}
-            onClick={() => issueLink(false)}
-            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50"
+            onClick={save}
+            className="bg-[var(--brand)] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
           >
-            生成新链接
+            {busy ? "提交中…" : "提交"}
           </button>
           <button
             type="button"
             disabled={busy}
-            onClick={copyLink}
-            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50"
+            onClick={cancel}
+            className="border border-[var(--line)] rounded-lg px-4 py-2 text-sm hover:bg-black/5 disabled:opacity-50"
           >
-            复制链接
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2 items-end pt-1">
-          <label className="text-sm flex-1 min-w-[200px]">
-            <span className="text-xs text-[var(--muted)]">发送到邮箱</span>
-            <input
-              value={sendTo}
-              onChange={(e) => setSendTo(e.target.value)}
-              placeholder="client@example.com"
-              className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy || !sendTo.trim()}
-            onClick={() => issueLink(true)}
-            className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            生成并发送
+            取消
           </button>
         </div>
       </div>

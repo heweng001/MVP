@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { PromoPublicEditor } from "@/components/PromoPublicEditor";
-import { getPromoByEditToken, isEditTokenValid, promoDisplayLabel } from "@/lib/promo";
+import { getPromoByEditToken, isEditTokenValid } from "@/lib/promo";
+import { PromoKeywordsPublicEditor } from "@/components/promo/PromoKeywordsEditor";
 
 type Ctx = { params: Promise<{ token: string }> };
 
-export default async function PromoPublicPage({ params }: Ctx) {
+export default async function PromoKeywordsPublicPage({ params }: Ctx) {
   const { token } = await params;
   const promo = await getPromoByEditToken(token);
   if (!promo) notFound();
@@ -13,7 +13,7 @@ export default async function PromoPublicPage({ params }: Ctx) {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-6 pt-12 bg-[var(--bg)]">
-      <div className="w-full max-w-3xl bg-[var(--panel)] border border-[var(--line)] rounded-lg p-6 shadow-sm">
+      <div className="w-full max-w-4xl bg-[var(--panel)] border border-[var(--line)] rounded-lg p-6 shadow-sm">
         {!valid ? (
           <div className="space-y-2">
             <h1 className="text-xl font-semibold tracking-tight">链接已失效</h1>
@@ -22,15 +22,11 @@ export default async function PromoPublicPage({ params }: Ctx) {
             </p>
           </div>
         ) : (
-          <PromoPublicEditor
+          <PromoKeywordsPublicEditor
             token={token}
-            displayLabel={promoDisplayLabel(promo)}
+            siteDomain={promo.site?.domain ?? null}
             expiresAt={promo.editTokenExpires?.toISOString() ?? null}
-            initial={{
-              keywords: promo.keywords,
-              productPoints: promo.productPoints,
-              adPoints: promo.adPoints,
-            }}
+            initialKeywords={promo.keywords}
           />
         )}
       </div>

@@ -17,7 +17,6 @@ export type ClientRow = {
   serviceEnd: string | null;
   lastVisitAt: string | null;
   _count: { sites: number };
-  promo: { id: string; lastSubmittedBy: string; lastSubmittedAt: string | null } | null;
 };
 
 type ClientTab = {
@@ -217,7 +216,6 @@ export function ClientList({
                   最近上门{sortMark("lastVisitAt")}
                 </Link>
               </th>
-              <th className="px-3 py-2">信息核对</th>
               <th className="px-3 py-2">备注</th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
@@ -225,7 +223,7 @@ export function ClientList({
           <tbody>
             {initialClients.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={9} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无客户，请点击「新增客户」
                 </td>
               </tr>
@@ -252,24 +250,6 @@ export function ClientList({
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(c.serviceStart)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(c.serviceEnd)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(c.lastVisitAt)}</td>
-                  <td className="px-3 py-2">
-                    {c.promo ? (
-                      <Link
-                        href={`/admin/promos/${c.promo.id}`}
-                        className="text-sky-800 hover:underline whitespace-nowrap"
-                        title="查看信息核对详情"
-                      >
-                        {c.promo.lastSubmittedBy || "未更新"}
-                        {c.promo.lastSubmittedAt ? (
-                          <span className="text-[var(--muted)] ml-1 text-xs">
-                            {formatDate(c.promo.lastSubmittedAt)}
-                          </span>
-                        ) : null}
-                      </Link>
-                    ) : (
-                      <span className="text-[var(--muted)]">—</span>
-                    )}
-                  </td>
                   <td className="px-3 py-2 max-w-[140px] truncate text-[var(--muted)]" title={c.notes}>
                     {c.notes || "—"}
                   </td>

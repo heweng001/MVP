@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SITE_TIERS, SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
+import { SITE_TIERS, SITE_TYPES, formatDate, formatDateTime, toDateInputValue } from "@/lib/labels";
 import type { SiteListTab, SiteSortField, SortDir } from "@/lib/list-tabs";
 import { compareSemver } from "@/lib/semver";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
@@ -26,6 +26,11 @@ export type SiteRow = {
   enabled: boolean;
   clientId: string;
   clientName: string;
+  promo: {
+    id: string;
+    lastSubmittedBy: string;
+    lastSubmittedAt: string | null;
+  } | null;
   forms: {
     id: string;
     formId: string;
@@ -60,8 +65,11 @@ type SiteTab = {
   count: number;
 };
 
+const NEW_CLIENT = "__new__";
+
 const emptyForm = {
-  clientId: "",
+  clientId: NEW_CLIENT,
+  newClientName: "",
   domain: "",
   siteType: "展示型",
   tier: "正常",
@@ -233,7 +241,12 @@ export function SiteList({
 
   function openCreate() {
     setEditing(null);
-    setForm({ ...emptyForm, clientId: filters.clientId || clients[0]?.id || "" });
+    // 从某客户页跳转过来时沿用该客户；否则默认「新客户」
+    setForm({
+      ...emptyForm,
+      clientId: filters.clientId || NEW_CLIENT,
+      newClientName: "",
+    });
     setCreating(true);
     setError("");
   }
@@ -243,6 +256,7 @@ export function SiteList({
     setEditing(s);
     setForm({
       clientId: s.clientId,
+      newClientName: "",
       domain: s.domain,
       siteType: s.siteType || "展示型",
       tier: s.tier || "正常",
@@ -266,11 +280,40 @@ export function SiteList({
     e.preventDefault();
     setBusy(true);
     setError("");
+
+    let clientId = form.clientId;
+    if (!editing && clientId === NEW_CLIENT) {
+      const name = form.newClientName.trim();
+      if (!name) {
+        setBusy(false);
+        setError("请填写新客户名称");
+        return;
+      }
+      const clientRes = await fetch("/api/admin/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const clientData = await clientRes.json().catch(() => ({}));
+      if (!clientRes.ok) {
+        setBusy(false);
+        setError(clientData.error || "创建客户失败");
+        return;
+      }
+      clientId = clientData.client?.id;
+      if (!clientId) {
+        setBusy(false);
+        setError("创建客户失败");
+        return;
+      }
+    }
+
     const url = editing ? `/api/admin/sites/${editing.id}` : "/api/admin/sites";
+    const { newClientName: _n, ...sitePayload } = form;
     const res = await fetch(url, {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...sitePayload, clientId }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -700,6 +743,7 @@ export function SiteList({
               <th className="px-3 py-2">域名</th>
               <th className="px-3 py-2">所属客户</th>
               <th className="px-3 py-2">分层</th>
+              <th className="px-3 py-2">信息核对</th>
               <th className="px-3 py-2">
                 <Link href={sortHref("startDate")} className="hover:text-[var(--ink)]" title="按开始日期排序">
                   开始日期{sortMark("startDate")}
@@ -724,7 +768,7 @@ export function SiteList({
           <tbody>
             {clientGroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={9} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -795,6 +839,24 @@ export function SiteList({
                       <span className={`text-xs px-2 py-0.5 rounded-full ${tierClass[s.tier] || ""}`}>
                         {s.tier || "正常"}
                       </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {s.promo ? (
+                        <Link
+                          href={`/admin/promos/${s.promo.id}`}
+                          className="text-sky-800 hover:underline whitespace-nowrap text-xs"
+                          title="查看信息核对"
+                        >
+                          {s.promo.lastSubmittedBy || "未更新"}
+                          {s.promo.lastSubmittedAt ? (
+                            <span className="text-[var(--muted)] ml-1">
+                              {formatDateTime(s.promo.lastSubmittedAt)}
+                            </span>
+                          ) : null}
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.startDate)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.endDate)}</td>
@@ -920,22 +982,49 @@ export function SiteList({
           >
             <h2 className="text-lg font-semibold">{editing ? "编辑网站" : "新增网站"}</h2>
             <div className="grid gap-3">
-              <label className="text-sm">
-                <span className="text-xs text-[var(--muted)]">所属客户 *</span>
-                <select
-                  required
-                  value={form.clientId}
-                  onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
-                >
-                  <option value="">选择客户</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div
+                className={
+                  !editing && form.clientId === NEW_CLIENT
+                    ? "grid grid-cols-2 gap-3"
+                    : "grid gap-3"
+                }
+              >
+                <label className="text-sm">
+                  <span className="text-xs text-[var(--muted)]">所属客户 *</span>
+                  <select
+                    required
+                    value={form.clientId}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        clientId: e.target.value,
+                        newClientName: e.target.value === NEW_CLIENT ? form.newClientName : "",
+                      })
+                    }
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                  >
+                    {!editing ? <option value={NEW_CLIENT}>新客户</option> : null}
+                    {editing ? <option value="">选择客户</option> : null}
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!editing && form.clientId === NEW_CLIENT ? (
+                  <label className="text-sm">
+                    <span className="text-xs text-[var(--muted)]">客户名称 *</span>
+                    <input
+                      required
+                      value={form.newClientName}
+                      onChange={(e) => setForm({ ...form, newClientName: e.target.value })}
+                      placeholder="稍后可在客户列表完善信息"
+                      className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                    />
+                  </label>
+                ) : null}
+              </div>
               <label className="text-sm">
                 <span className="text-xs text-[var(--muted)]">网站域名 *</span>
                 <input
