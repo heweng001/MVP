@@ -43,6 +43,9 @@ export const SITE_SORT_FIELDS = ["startDate", "endDate", "formCount"] as const;
 export type SiteSortField = (typeof SITE_SORT_FIELDS)[number];
 export type SortDir = "asc" | "desc";
 
+export const CLIENT_SORT_FIELDS = ["serviceStart", "serviceEnd", "lastVisitAt"] as const;
+export type ClientSortField = (typeof CLIENT_SORT_FIELDS)[number];
+
 /** 结束日的日历天早于今天 → 已到期（结束日当天仍算在期内） */
 export function isPastServiceEnd(end: Date | string | null | undefined, now = new Date()) {
   if (end == null || end === "") return false;
@@ -84,13 +87,26 @@ export function parseSiteListTab(tab: string | undefined): SiteListTab {
   return "seo";
 }
 
+/** 默认按结束日期升序 */
 export function parseSiteSort(
   sort: string | undefined,
   order: string | undefined,
-): { sort: SiteSortField | null; order: SortDir } {
+): { sort: SiteSortField; order: SortDir } {
   const field = SITE_SORT_FIELDS.includes(sort as SiteSortField)
     ? (sort as SiteSortField)
-    : null;
+    : "endDate";
+  const dir: SortDir = order === "asc" || order === "desc" ? order : "asc";
+  return { sort: field, order: dir };
+}
+
+/** 默认按服务结束升序 */
+export function parseClientSort(
+  sort: string | undefined,
+  order: string | undefined,
+): { sort: ClientSortField; order: SortDir } {
+  const field = CLIENT_SORT_FIELDS.includes(sort as ClientSortField)
+    ? (sort as ClientSortField)
+    : "serviceEnd";
   const dir: SortDir = order === "asc" || order === "desc" ? order : "asc";
   return { sort: field, order: dir };
 }

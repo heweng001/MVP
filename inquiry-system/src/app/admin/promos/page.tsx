@@ -18,7 +18,7 @@ export default async function PromosPage({
           }
         : undefined,
       orderBy: { updatedAt: "desc" },
-      include: { client: { select: { id: true, name: true, tier: true } } },
+      include: { client: { select: { id: true, name: true } } },
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },

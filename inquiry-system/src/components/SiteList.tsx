@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
+import { SITE_TIERS, SITE_TYPES, formatDate, toDateInputValue } from "@/lib/labels";
 import type { SiteListTab, SiteSortField, SortDir } from "@/lib/list-tabs";
 import { compareSemver } from "@/lib/semver";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
@@ -12,6 +12,7 @@ export type SiteRow = {
   id: string;
   domain: string;
   siteType: string;
+  tier: string;
   startDate: string | null;
   endDate: string | null;
   siteKey: string;
@@ -35,7 +36,21 @@ export type SiteRow = {
   formCount: number;
 };
 
-type ClientOpt = { id: string; name: string };
+type ClientOpt = {
+  id: string;
+  name: string;
+  contactName: string;
+  phone: string;
+  address: string;
+  notes: string;
+  lastVisitAt: string | null;
+};
+
+const tierClass: Record<string, string> = {
+  重点: "bg-rose-100 text-rose-800",
+  正常: "bg-slate-100 text-slate-700",
+  维护: "bg-amber-100 text-amber-800",
+};
 
 type SiteTab = {
   key: SiteListTab;
@@ -48,12 +63,22 @@ const emptyForm = {
   clientId: "",
   domain: "",
   siteType: "展示型",
+  tier: "正常",
   startDate: "",
   endDate: "",
   wpAdminUrl: "",
   wpUsername: "",
   wpPassword: "",
   enabled: true,
+};
+
+const emptyClientForm = {
+  name: "",
+  contactName: "",
+  phone: "",
+  address: "",
+  notes: "",
+  lastVisitAt: "",
 };
 
 type BatchPluginProgress = {
@@ -88,7 +113,7 @@ export function SiteList({
     q: string;
     enabled: string;
     tab: SiteListTab;
-    sort: SiteSortField | null;
+    sort: SiteSortField;
     order: SortDir;
   };
   tab: SiteListTab;
@@ -102,6 +127,31 @@ export function SiteList({
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [batchProgress, setBatchProgress] = useState<BatchPluginProgress | null>(null);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(() => new Set());
+  const [editingClient, setEditingClient] = useState<ClientOpt | null>(null);
+  const [clientForm, setClientForm] = useState(emptyClientForm);
+  const [clientError, setClientError] = useState("");
+
+  const clientGroups = useMemo(() => {
+    const map = new Map<string, SiteRow[]>();
+    for (const s of initialSites) {
+      const list = map.get(s.clientId) || [];
+      list.push(s);
+      map.set(s.clientId, list);
+    }
+    const order: string[] = [];
+    for (const s of initialSites) {
+      if (!order.includes(s.clientId)) order.push(s.clientId);
+    }
+    return order.map((id) => {
+      const sites = map.get(id)!;
+      return {
+        clientId: id,
+        clientName: sites[0]?.clientName || "",
+        sites,
+      };
+    });
+  }, [initialSites]);
 
   function buildHref(overrides: Record<string, string | null | undefined> = {}) {
     const p = new URLSearchParams();
@@ -110,8 +160,8 @@ export function SiteList({
       clientId: filters.clientId,
       q: filters.q,
       enabled: filters.enabled,
-      sort: filters.sort || "",
-      order: filters.sort ? filters.order : "",
+      sort: filters.sort,
+      order: filters.order,
       ...overrides,
     };
     for (const [k, v] of Object.entries(next)) {
@@ -119,6 +169,54 @@ export function SiteList({
     }
     const qs = p.toString();
     return qs ? `/admin/sites?${qs}` : "/admin/sites";
+  }
+
+  function toggleClientExpand(clientId: string) {
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }
+
+  function openClientEdit(clientId: string, clientName: string) {
+    const c = clients.find((x) => x.id === clientId);
+    setEditingClient(c || { id: clientId, name: clientName, contactName: "", phone: "", address: "", notes: "", lastVisitAt: null });
+    setClientForm({
+      name: c?.name || clientName,
+      contactName: c?.contactName || "",
+      phone: c?.phone || "",
+      address: c?.address || "",
+      notes: c?.notes || "",
+      lastVisitAt: toDateInputValue(c?.lastVisitAt),
+    });
+    setClientError("");
+  }
+
+  function closeClientEdit() {
+    setEditingClient(null);
+    setClientError("");
+  }
+
+  async function saveClient(e: FormEvent) {
+    e.preventDefault();
+    if (!editingClient) return;
+    setBusy(true);
+    setClientError("");
+    const res = await fetch(`/api/admin/clients/${editingClient.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clientForm),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setClientError(data.error || "保存失败");
+      return;
+    }
+    closeClientEdit();
+    router.refresh();
   }
 
   function sortHref(field: SiteSortField) {
@@ -146,6 +244,7 @@ export function SiteList({
       clientId: s.clientId,
       domain: s.domain,
       siteType: s.siteType || "展示型",
+      tier: s.tier || "正常",
       startDate: toDateInputValue(s.startDate),
       endDate: toDateInputValue(s.endDate),
       wpAdminUrl: s.wpAdminUrl || "",
@@ -599,7 +698,7 @@ export function SiteList({
             <tr>
               <th className="px-3 py-2">域名</th>
               <th className="px-3 py-2">所属客户</th>
-              <th className="px-3 py-2">站点类型</th>
+              <th className="px-3 py-2">分层</th>
               <th className="px-3 py-2">
                 <Link href={sortHref("startDate")} className="hover:text-[var(--ink)]" title="按开始日期排序">
                   开始日期{sortMark("startDate")}
@@ -622,85 +721,134 @@ export function SiteList({
             </tr>
           </thead>
           <tbody>
-            {initialSites.length === 0 ? (
+            {clientGroups.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
             ) : (
-              initialSites.map((s) => (
-                <tr key={s.id} className="border-t border-[var(--line)]">
-                  <td className="px-3 py-2 font-medium">
-                    <a
-                      href={
-                        /^https?:\/\//i.test(s.domain)
-                          ? s.domain
-                          : `https://${s.domain}`
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[var(--brand)] hover:underline"
-                      title="在新窗口打开网站"
-                    >
-                      {s.domain}
-                    </a>
-                  </td>
-                  <td className="px-3 py-2">{s.clientName}</td>
-                  <td className="px-3 py-2">{s.siteType}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.startDate)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.endDate)}</td>
-                  <td className="px-3 py-2">
-                    {s.enabled ? (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-800"
-                        title="本系统接受该站插件推送的询盘"
-                      >
-                        对接中
+              clientGroups.flatMap((group) => {
+                const multi = group.sites.length > 1;
+                const expanded = expandedClients.has(group.clientId);
+                const visible = multi && !expanded ? group.sites.slice(0, 1) : group.sites;
+                return visible.map((s, idx) => (
+                  <tr key={s.id} className="border-t border-[var(--line)]">
+                    <td className="px-3 py-2 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {multi && idx === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleClientExpand(group.clientId)}
+                            className="shrink-0 w-5 h-5 inline-flex items-center justify-center rounded text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
+                            title={expanded ? "折叠同客户其他域名" : `展开另 ${group.sites.length - 1} 个域名`}
+                            aria-expanded={expanded}
+                          >
+                            {expanded ? "▼" : "▶"}
+                          </button>
+                        ) : multi ? (
+                          <span className="w-5 shrink-0" />
+                        ) : null}
+                        <a
+                          href={
+                            /^https?:\/\//i.test(s.domain)
+                              ? s.domain
+                              : `https://${s.domain}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[var(--brand)] hover:underline"
+                          title="在新窗口打开网站"
+                        >
+                          {s.domain}
+                        </a>
+                        {multi && idx === 0 && !expanded ? (
+                          <span className="text-[11px] text-[var(--muted)] whitespace-nowrap">
+                            +{group.sites.length - 1}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center gap-1">
+                        {s.clientName}
+                        <button
+                          type="button"
+                          onClick={() => openClientEdit(s.clientId, s.clientName)}
+                          className="inline-flex items-center justify-center w-5 h-5 rounded text-[var(--muted)] hover:bg-black/5 hover:text-[var(--brand)]"
+                          title="编辑客户信息"
+                          aria-label="编辑客户信息"
+                        >
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="w-3.5 h-3.5"
+                            aria-hidden
+                          >
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.5 8.5A2 2 0 016.5 15.5H4v-2.5a2 2 0 01.586-1.414l8.999-8z" />
+                          </svg>
+                        </button>
                       </span>
-                    ) : (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600"
-                        title="本系统拒收该站推送；询盘由 WPForms 原生邮件发送，不进统计"
-                      >
-                        已关闭
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${tierClass[s.tier] || ""}`}>
+                        {s.tier || "正常"}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{s.formCount}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
-                    {s.hasWpCredentials ? (
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.startDate)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(s.endDate)}</td>
+                    <td className="px-3 py-2">
+                      {s.enabled ? (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-800"
+                          title="本系统接受该站插件推送的询盘"
+                        >
+                          对接中
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600"
+                          title="本系统拒收该站推送；询盘由 WPForms 原生邮件发送，不进统计"
+                        >
+                          已关闭
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{s.formCount}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
+                      {s.hasWpCredentials ? (
+                        <button
+                          type="button"
+                          className="text-[var(--brand)]"
+                          disabled={busy}
+                          onClick={() => enterWpAdmin(s)}
+                          title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
+                        >
+                          进入后台
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="text-[var(--brand)]"
-                        disabled={busy}
-                        onClick={() => enterWpAdmin(s)}
-                        title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
+                        className="text-[var(--brand)] font-medium"
+                        onClick={() => setConfigSite(s)}
                       >
-                        进入后台
+                        配置对接
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="text-[var(--brand)] font-medium"
-                      onClick={() => setConfigSite(s)}
-                    >
-                      配置对接
-                    </button>
-                    <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      className="text-[var(--danger)]"
-                      disabled={busy}
-                      onClick={() => remove(s)}
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))
+                      <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[var(--danger)]"
+                        disabled={busy}
+                        onClick={() => remove(s)}
+                      >
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ));
+              })
             )}
           </tbody>
         </table>
@@ -797,20 +945,36 @@ export function SiteList({
                   className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
                 />
               </label>
-              <label className="text-sm">
-                <span className="text-xs text-[var(--muted)]">站点类型</span>
-                <select
-                  value={form.siteType}
-                  onChange={(e) => setForm({ ...form, siteType: e.target.value })}
-                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
-                >
-                  {SITE_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm">
+                  <span className="text-xs text-[var(--muted)]">站点类型</span>
+                  <select
+                    value={form.siteType}
+                    onChange={(e) => setForm({ ...form, siteType: e.target.value })}
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                  >
+                    {SITE_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="text-xs text-[var(--muted)]">分层</span>
+                  <select
+                    value={form.tier}
+                    onChange={(e) => setForm({ ...form, tier: e.target.value })}
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                  >
+                    {SITE_TIERS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm">
                   <span className="text-xs text-[var(--muted)]">开始日期</span>
@@ -895,6 +1059,85 @@ export function SiteList({
               <button
                 type="button"
                 onClick={closeModal}
+                className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
+              >
+                取消
+              </button>
+              <button
+                disabled={busy}
+                className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {editingClient ? (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <form
+            onSubmit={saveClient}
+            className="bg-white rounded-2xl w-full max-w-xl p-5 space-y-3 shadow-lg max-h-[90vh] overflow-y-auto"
+          >
+            <h2 className="text-lg font-semibold">编辑客户</h2>
+            <div className="grid md:grid-cols-2 gap-3">
+              <label className="text-sm md:col-span-2">
+                <span className="text-xs text-[var(--muted)]">客户名称 *</span>
+                <input
+                  required
+                  value={clientForm.name}
+                  onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-xs text-[var(--muted)]">联系人称呼</span>
+                <input
+                  value={clientForm.contactName}
+                  onChange={(e) => setClientForm({ ...clientForm, contactName: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-xs text-[var(--muted)]">电话</span>
+                <input
+                  value={clientForm.phone}
+                  onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-xs text-[var(--muted)]">最近上门日期</span>
+                <input
+                  type="date"
+                  value={clientForm.lastVisitAt}
+                  onChange={(e) => setClientForm({ ...clientForm, lastVisitAt: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm md:col-span-2">
+                <span className="text-xs text-[var(--muted)]">地址</span>
+                <input
+                  value={clientForm.address}
+                  onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm md:col-span-2">
+                <span className="text-xs text-[var(--muted)]">备注</span>
+                <textarea
+                  value={clientForm.notes}
+                  onChange={(e) => setClientForm({ ...clientForm, notes: e.target.value })}
+                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 min-h-[70px]"
+                />
+              </label>
+            </div>
+            {clientError ? <p className="text-sm text-[var(--danger)]">{clientError}</p> : null}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={closeClientEdit}
                 className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
               >
                 取消

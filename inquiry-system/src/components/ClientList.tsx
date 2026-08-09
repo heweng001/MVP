@@ -1,15 +1,14 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CLIENT_TIERS, formatDate, toDateInputValue } from "@/lib/labels";
-import type { ClientListTab } from "@/lib/list-tabs";
+import { formatDate, toDateInputValue } from "@/lib/labels";
+import type { ClientListTab, ClientSortField, SortDir } from "@/lib/list-tabs";
 
 export type ClientRow = {
   id: string;
   name: string;
-  tier: string;
   contactName: string;
   phone: string;
   address: string;
@@ -30,7 +29,6 @@ type ClientTab = {
 
 const emptyForm = {
   name: "",
-  tier: "正常",
   contactName: "",
   phone: "",
   address: "",
@@ -40,16 +38,18 @@ const emptyForm = {
 
 export function ClientList({
   initialClients,
-  initialTier,
   initialQ,
   tab,
   tabs,
+  sort,
+  order,
 }: {
   initialClients: ClientRow[];
-  initialTier: string;
   initialQ: string;
   tab: ClientListTab;
   tabs: ClientTab[];
+  sort: ClientSortField;
+  order: SortDir;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -58,23 +58,32 @@ export function ClientList({
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
 
-  function hrefFor(nextTab: string) {
+  function buildHref(overrides: Record<string, string | null | undefined> = {}) {
     const p = new URLSearchParams();
-    p.set("tab", nextTab);
-    if (initialTier) p.set("tier", initialTier);
-    if (initialQ) p.set("q", initialQ);
-    return `/admin/clients?${p.toString()}`;
+    const next = {
+      tab,
+      q: initialQ,
+      sort,
+      order,
+      ...overrides,
+    };
+    for (const [k, v] of Object.entries(next)) {
+      if (v) p.set(k, v);
+    }
+    const qs = p.toString();
+    return qs ? `/admin/clients?${qs}` : "/admin/clients";
   }
 
-  const tierClass = useMemo(
-    () =>
-      ({
-        重点: "bg-rose-100 text-rose-800",
-        正常: "bg-slate-100 text-slate-700",
-        维护: "bg-amber-100 text-amber-800",
-      }) as Record<string, string>,
-    [],
-  );
+  function sortHref(field: ClientSortField) {
+    const same = sort === field;
+    const nextOrder: SortDir = same && order === "asc" ? "desc" : "asc";
+    return buildHref({ sort: field, order: nextOrder });
+  }
+
+  function sortMark(field: ClientSortField) {
+    if (sort !== field) return "";
+    return order === "asc" ? " ↑" : " ↓";
+  }
 
   function openCreate() {
     setEditing(null);
@@ -88,7 +97,6 @@ export function ClientList({
     setEditing(c);
     setForm({
       name: c.name,
-      tier: c.tier || "正常",
       contactName: c.contactName || "",
       phone: c.phone || "",
       address: c.address || "",
@@ -139,18 +147,8 @@ export function ClientList({
     <div className="space-y-4">
       <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3">
         <input type="hidden" name="tab" value={tab} />
-        <select
-          name="tier"
-          defaultValue={initialTier}
-          className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-        >
-          <option value="">全部分层</option>
-          {CLIENT_TIERS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+        <input type="hidden" name="sort" value={sort} />
+        <input type="hidden" name="order" value={order} />
         <input
           name="q"
           defaultValue={initialQ}
@@ -173,7 +171,7 @@ export function ClientList({
           return (
             <span key={t.key} className="relative group/tab">
               <Link
-                href={hrefFor(t.key)}
+                href={buildHref({ tab: t.key })}
                 className={`inline-block px-2.5 py-1.5 text-xs rounded-t-md border border-b-0 -mb-px ${
                   active
                     ? "bg-white border-[var(--line)] text-[var(--brand)] font-medium"
@@ -201,13 +199,24 @@ export function ClientList({
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">客户名称</th>
-              <th className="px-3 py-2">分层</th>
               <th className="px-3 py-2">联系人称呼</th>
               <th className="px-3 py-2">电话</th>
               <th className="px-3 py-2">地址</th>
-              <th className="px-3 py-2">服务开始</th>
-              <th className="px-3 py-2">服务结束</th>
-              <th className="px-3 py-2">最近上门</th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("serviceStart")} className="hover:text-[var(--ink)]" title="按服务开始排序">
+                  服务开始{sortMark("serviceStart")}
+                </Link>
+              </th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("serviceEnd")} className="hover:text-[var(--ink)]" title="按服务结束排序">
+                  服务结束{sortMark("serviceEnd")}
+                </Link>
+              </th>
+              <th className="px-3 py-2">
+                <Link href={sortHref("lastVisitAt")} className="hover:text-[var(--ink)]" title="按最近上门排序">
+                  最近上门{sortMark("lastVisitAt")}
+                </Link>
+              </th>
               <th className="px-3 py-2">信息核对</th>
               <th className="px-3 py-2">备注</th>
               <th className="px-3 py-2 text-right">操作</th>
@@ -216,7 +225,7 @@ export function ClientList({
           <tbody>
             {initialClients.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={10} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无客户，请点击「新增客户」
                 </td>
               </tr>
@@ -234,11 +243,6 @@ export function ClientList({
                         {c._count.sites} 站
                       </Link>
                     </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${tierClass[c.tier] || ""}`}>
-                      {c.tier}
-                    </span>
                   </td>
                   <td className="px-3 py-2">{c.contactName || "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{c.phone || "—"}</td>
@@ -312,20 +316,6 @@ export function ClientList({
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
                 />
-              </label>
-              <label className="text-sm">
-                <span className="text-xs text-[var(--muted)]">客户分层</span>
-                <select
-                  value={form.tier}
-                  onChange={(e) => setForm({ ...form, tier: e.target.value })}
-                  className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
-                >
-                  {CLIENT_TIERS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
               </label>
               <label className="text-sm">
                 <span className="text-xs text-[var(--muted)]">联系人称呼</span>

@@ -1,5 +1,6 @@
-export const CLIENT_TIERS = ["重点", "正常", "维护"] as const;
-export type ClientTier = (typeof CLIENT_TIERS)[number];
+/** 网站分层（原客户分层迁至网站） */
+export const SITE_TIERS = ["重点", "正常", "维护"] as const;
+export type SiteTier = (typeof SITE_TIERS)[number];
 
 export const SITE_TYPES = ["SEO型", "展示型"] as const;
 export type SiteType = (typeof SITE_TYPES)[number];

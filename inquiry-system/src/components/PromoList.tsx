@@ -10,7 +10,7 @@ type Row = {
   lastSubmittedBy: string;
   lastSubmittedAt: string | null;
   updatedAt: string;
-  client: { id: string; name: string; tier: string };
+  client: { id: string; name: string };
 };
 
 export function PromoList({

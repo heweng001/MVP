@@ -17,8 +17,6 @@ model AdminUser {
 model Client {
   id           String    @id @default(cuid())
   name         String
-  /// 重点 | 正常 | 维护
-  tier         String    @default("正常")
   contactName  String    @default("")
   phone        String    @default("")
   address      String    @default("")
@@ -75,8 +73,10 @@ model Site {
   clientId        String
   client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   domain          String
-  /// SEO型 | 展示型
+  /// SEO型 | 展示型（页签/邮件门控；列表不展示）
   siteType        String    @default("展示型")
+  /// 重点 | 正常 | 维护
+  tier            String    @default("正常")
   startDate       DateTime?
   endDate         DateTime?
   siteKey         String    @unique
@@ -98,6 +98,7 @@ model Site {
 
   @@index([clientId])
   @@index([siteType])
+  @@index([tier])
   @@index([domain])
 }
 

@@ -34,23 +34,22 @@ function sortSites<
     clientName: string;
     domain: string;
   },
->(rows: T[], sort: SiteSortField | null, order: SortDir) {
+>(rows: T[], sort: SiteSortField, order: SortDir) {
   const list = [...rows];
-  if (!sort) {
-    list.sort((a, b) => {
-      const byClient = a.clientName.localeCompare(b.clientName, "zh-CN");
-      if (byClient !== 0) return byClient;
-      return a.domain.localeCompare(b.domain, "zh-CN");
-    });
-    return list;
-  }
   list.sort((a, b) => {
+    let cmp = 0;
     if (sort === "formCount") {
       const diff = a.formCount - b.formCount;
-      return order === "asc" ? diff : -diff;
+      cmp = order === "asc" ? diff : -diff;
+    } else if (sort === "startDate") {
+      cmp = compareNullableDate(a.startDate, b.startDate, order);
+    } else {
+      cmp = compareNullableDate(a.endDate, b.endDate, order);
     }
-    if (sort === "startDate") return compareNullableDate(a.startDate, b.startDate, order);
-    return compareNullableDate(a.endDate, b.endDate, order);
+    if (cmp !== 0) return cmp;
+    const byClient = a.clientName.localeCompare(b.clientName, "zh-CN");
+    if (byClient !== 0) return byClient;
+    return a.domain.localeCompare(b.domain, "zh-CN");
   });
   return list;
 }
@@ -96,6 +95,7 @@ export default async function SitesPage({
     id: s.id,
     domain: s.domain,
     siteType: s.siteType,
+    tier: s.tier,
     startDate: s.startDate?.toISOString() ?? null,
     endDate: s.endDate?.toISOString() ?? null,
     siteKey: s.siteKey,
@@ -148,11 +148,9 @@ export default async function SitesPage({
               页签右侧「插件更新」会先并行检测全部网站，仅自动更新已装插件且非最新的站点；未检测到插件的站点直接跳过。
             </p>
             <p>
-              未到期网站按类型分「SEO型 / 展示型」；结束日早于今天归入「到期」。
+              未到期网站按类型分「SEO型 / 展示型」；结束日早于今天归入「到期」。列表默认按结束日期升序，同客户多域名默认折叠。
             </p>
-            <p>
-              默认同属一个客户的网站排在一起；可点击开始/结束日期或表单数切换升降序。
-            </p>
+            <p>分层（重点/正常/维护）在列表展示；站点类型仍可在编辑中修改，用于页签与邮件门控。</p>
           </div>
         }
       />
@@ -167,7 +165,15 @@ export default async function SitesPage({
           hint: t.hint,
           count: tabCounts[t.key],
         }))}
-        clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+        clients={clients.map((c) => ({
+          id: c.id,
+          name: c.name,
+          contactName: c.contactName,
+          phone: c.phone,
+          address: c.address,
+          notes: c.notes,
+          lastVisitAt: c.lastVisitAt?.toISOString() ?? null,
+        }))}
         initialSites={filtered.map(({ listTab: _listTab, ...row }) => row)}
       />
     </div>

@@ -10,7 +10,7 @@ export async function GET() {
   const items = await prisma.clientPromo.findMany({
     orderBy: { updatedAt: "desc" },
     include: {
-      client: { select: { id: true, name: true, tier: true } },
+      client: { select: { id: true, name: true } },
     },
   });
   return NextResponse.json({ items });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { SITE_TYPES, parseDateInput } from "@/lib/labels";
+import { SITE_TIERS, SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
 import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
@@ -54,12 +54,17 @@ export async function POST(req: NextRequest) {
   if (!SITE_TYPES.includes(siteType as (typeof SITE_TYPES)[number])) {
     return NextResponse.json({ error: "无效站点类型" }, { status: 400 });
   }
+  const tier = String(body.tier || "正常");
+  if (!SITE_TIERS.includes(tier as (typeof SITE_TIERS)[number])) {
+    return NextResponse.json({ error: "无效分层" }, { status: 400 });
+  }
 
   const site = await prisma.site.create({
     data: {
       clientId,
       domain,
       siteType,
+      tier,
       startDate: parseDateInput(body.startDate),
       endDate: parseDateInput(body.endDate),
       siteKey: String(body.siteKey || randomBytes(16).toString("hex")),

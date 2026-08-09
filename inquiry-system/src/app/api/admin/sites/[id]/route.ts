@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { SITE_TYPES, parseDateInput } from "@/lib/labels";
+import { SITE_TIERS, SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
 import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
@@ -43,6 +43,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (body.siteType !== undefined && !SITE_TYPES.includes(body.siteType)) {
     return NextResponse.json({ error: "无效站点类型" }, { status: 400 });
   }
+  if (
+    body.tier !== undefined &&
+    !SITE_TIERS.includes(body.tier as (typeof SITE_TIERS)[number])
+  ) {
+    return NextResponse.json({ error: "无效分层" }, { status: 400 });
+  }
 
   const existing = await prisma.site.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -53,6 +59,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       clientId: body.clientId !== undefined ? String(body.clientId) : undefined,
       domain: body.domain !== undefined ? String(body.domain).trim() : undefined,
       siteType: body.siteType !== undefined ? String(body.siteType) : undefined,
+      tier: body.tier !== undefined ? String(body.tier) : undefined,
       startDate: body.startDate !== undefined ? parseDateInput(body.startDate) : undefined,
       endDate: body.endDate !== undefined ? parseDateInput(body.endDate) : undefined,
       productKeywords:
