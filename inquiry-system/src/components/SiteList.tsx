@@ -1015,7 +1015,7 @@ export function SiteList({
                           setConfigSite(s);
                         }}
                       >
-                        配置对接
+                        询盘配置
                       </button>
                       <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
                         编辑
@@ -1362,25 +1362,6 @@ export function SiteList({
                   </Link>
                 ) : null}
               </div>
-              <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
-                <label className="text-sm flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={form.enabled}
-                    onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-                  />
-                  <span>
-                    <span className="font-medium">启用询盘对接</span>
-                    <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
-                      勾选后：该站 WordPress 插件可用 site_key 把表单询盘推到本系统（垃圾过滤、代发客户、统计有效询盘）。
-                      <br />
-                      取消勾选后：本系统<strong>立即拒收</strong>该站推送；网站表单仍可提交，但询盘会走
-                      WPForms 原生邮件，且<strong>不会</strong>出现在本系统列表/报表中。适合服务暂停或临时下线对接。
-                    </span>
-                  </span>
-                </label>
-              </div>
             </div>
             {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
             </div>
@@ -1484,11 +1465,13 @@ export function SiteList({
 
       {configLive ? (
         <SiteFormConfigPanel
+          key={`${configLive.id}-${configLive.enabled}-${configLive.forms.map((f) => f.id).join(",")}`}
           siteId={configLive.id}
           domain={configLive.domain}
           siteKey={configLive.siteKey}
           ingestUrl={ingestUrl}
           forms={configLive.forms}
+          enabled={configLive.enabled}
           onClose={() => setConfigSite(null)}
         />
       ) : null}

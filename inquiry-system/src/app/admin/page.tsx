@@ -93,7 +93,7 @@ export default async function AdminHome({
           <Link href="/admin/sites" className="text-[var(--brand)] underline underline-offset-2">
             网站列表
           </Link>
-          ，再点网站右侧「配置对接」完成对接。
+          ，再点网站右侧「询盘配置」完成对接。
         </div>
       ) : null}
 

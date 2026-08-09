@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-/** 右侧全高抽屉，与「配置对接」一致 */
+/** 右侧全高抽屉（询盘配置 / 编辑等） */
 export function SideDrawer({
   onClose,
   children,

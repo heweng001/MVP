@@ -30,3 +30,19 @@ export async function POST(req: NextRequest) {
   });
   return NextResponse.json({ form });
 }
+
+export async function DELETE(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const id = String(body.id || "").trim();
+  if (!id) {
+    return NextResponse.json({ error: "缺少表单配置 id" }, { status: 400 });
+  }
+  try {
+    await prisma.formMailConfig.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "删除失败或记录不存在" }, { status: 404 });
+  }
+}

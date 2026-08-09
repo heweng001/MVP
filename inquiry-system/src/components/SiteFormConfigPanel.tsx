@@ -43,6 +43,7 @@ export function SiteFormConfigPanel({
   siteKey,
   ingestUrl,
   forms,
+  enabled: initialEnabled,
   onClose,
 }: {
   siteId: string;
@@ -50,15 +51,19 @@ export function SiteFormConfigPanel({
   siteKey: string;
   ingestUrl: string;
   forms: FormCfg[];
+  enabled: boolean;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [err, setErr] = useState("");
 
   async function saveForm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setBusy(true);
+    setErr("");
     const fd = new FormData(form);
     const res = await fetch("/api/admin/forms", {
       method: "POST",
@@ -71,29 +76,81 @@ export function SiteFormConfigPanel({
       }),
     });
     setBusy(false);
-    if (!res.ok) return;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "保存失败");
+      return;
+    }
     form.reset();
+    router.refresh();
+  }
+
+  async function removeForm(id: string, formId: string) {
+    if (!confirm(`确认删除 Form ${formId} 的收件配置？`)) return;
+    setBusy(true);
+    setErr("");
+    const res = await fetch("/api/admin/forms", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "删除失败");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function toggleEnabled(next: boolean) {
+    setBusy(true);
+    setErr("");
+    const res = await fetch(`/api/admin/sites/${siteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: next }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "更新对接状态失败");
+      return;
+    }
+    setEnabled(next);
     router.refresh();
   }
 
   return (
     <SideDrawer onClose={onClose}>
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">配置对接清单</h2>
-            <p className="text-sm text-[var(--muted)] mt-0.5">{domain}</p>
-            <p className="text-xs text-[var(--muted)] mt-1">
-              请按下方步骤完成。插件装在客户 WordPress 站，不在本系统服务器。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm border border-[var(--line)] rounded-lg px-2 py-1 shrink-0"
-          >
-            关闭
-          </button>
+        <div>
+          <h2 className="text-lg font-semibold">询盘配置</h2>
+          <p className="text-sm text-[var(--muted)] mt-0.5">{domain}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">
+            请按下方步骤完成。插件装在客户 WordPress 站，不在本系统服务器。
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[var(--line)] bg-black/[0.02] p-3">
+          <label className="text-sm flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={enabled}
+              disabled={busy}
+              onChange={(e) => toggleEnabled(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">启用询盘对接</span>
+              <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
+                勾选后：该站 WordPress 插件可用 site_key 把表单询盘推到本系统。
+                <br />
+                取消勾选后：本系统<strong>立即拒收</strong>该站推送；询盘走 WPForms
+                原生邮件，且不会进本系统列表/报表。
+              </span>
+            </span>
+          </label>
         </div>
 
         <Step n={1} title="下载并安装 WordPress 插件">
@@ -144,14 +201,27 @@ export function SiteFormConfigPanel({
               <li className="text-[var(--warn)] text-xs">尚未配置表单收件，请先添加下方表单。</li>
             ) : (
               forms.map((f) => (
-                <li key={f.id} className="border-b border-[var(--line)] py-1.5 text-xs">
-                  Form {f.formId} → {f.toEmails}
-                  {f.ccEmails ? `；CC ${f.ccEmails}` : ""}
+                <li
+                  key={f.id}
+                  className="border-b border-[var(--line)] py-1.5 text-xs flex items-center justify-between gap-2"
+                >
+                  <span>
+                    Form {f.formId} → {f.toEmails}
+                    {f.ccEmails ? `；CC ${f.ccEmails}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => removeForm(f.id, f.formId)}
+                    className="shrink-0 text-[var(--danger)] hover:underline disabled:opacity-50"
+                  >
+                    删除
+                  </button>
                 </li>
               ))
             )}
           </ul>
-          <form onSubmit={saveForm} className="grid gap-2">
+          <form id="site-form-mail-config" onSubmit={saveForm} className="grid gap-2">
             <input
               name="formId"
               required
@@ -169,31 +239,36 @@ export function SiteFormConfigPanel({
               placeholder="抄送 CC，逗号分隔（可选）"
               className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
             />
-            <button
-              disabled={busy}
-              className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-            >
-              保存/更新表单收件
-            </button>
           </form>
         </Step>
 
-        <Step n={4} title="保留 WPForms 原生通知（降级备用）">
-          <p className="text-xs text-[var(--muted)]">
+        <div className="rounded-xl border border-[var(--line)] bg-amber-50/60 px-3 py-2.5 space-y-1.5">
+          <p className="text-xs font-medium text-[var(--warn)]">提示：保留 WPForms 原生通知</p>
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
             请<strong>保留</strong> WPForms 该表单的通知收件人。插件推送成功时会阻止本次原生发信；推送失败时仍由
             WPForms 发信，避免丢单。
           </p>
-          <p className="text-xs text-[var(--muted)]">
-            邮件规则：第一封为标记邮件（不含买家邮箱）；客户标「有效」后，服务期内系统会立刻再发一封含买家邮箱的邮件供回复。分割线下方仅展示地理位置与浏览路径（展示型站点为升级提示）。
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
+            邮件规则：第一封为标记邮件（不含买家邮箱）；客户标「有效」后，服务期内系统会立刻再发一封含买家邮箱的邮件供回复。
           </p>
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
             配置完成后，在站点前台提交一封测试询盘：本系统「询盘列表」应出现记录，步骤 3
             配置的收件邮箱应收到带「有效/无效」按钮的邮件（需已在「发件设置」配好 SMTP）。
           </p>
-        </Step>
+        </div>
+
+        {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
       </div>
 
-      <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3 flex justify-end">
+      <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3 flex justify-end gap-2">
+        <button
+          type="submit"
+          form="site-form-mail-config"
+          disabled={busy}
+          className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          {busy ? "保存中…" : "保存/更新表单收件"}
+        </button>
         <button
           type="button"
           onClick={onClose}

@@ -17,7 +17,7 @@ export default async function SettingsPage() {
           <div className="space-y-1.5">
             <p>配置系统代发询盘邮件所用的 SMTP 账号与发件人地址，以及垃圾分流转分数阈值。</p>
             <p>
-              收件人/抄送在各网站「配置对接」里设置；这里只配置<strong>用哪个邮箱发出</strong>。
+              收件人/抄送在各网站「询盘配置」里设置；这里只配置<strong>用哪个邮箱发出</strong>。
             </p>
             <p>
               密码请用<strong>客户端授权码</strong>。端口：587 不勾选 SSL；465 勾选 SSL。保存后请先发测试邮件。
