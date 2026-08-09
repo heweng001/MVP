@@ -1,5 +1,4 @@
 import { randomBytes } from "crypto";
-import DOMPurify from "isomorphic-dompurify";
 import { prisma } from "./prisma";
 import { appUrl } from "./constants";
 
@@ -106,13 +105,19 @@ export function ensureRichHtml(raw: string): string {
     .join("");
 }
 
-/** 保存前清洗 HTML（允许表格与外链图片） */
+/**
+ * 保存前清洗 HTML（无 jsdom，兼容服务器 Node 20）。
+ * 去掉脚本/事件与危险协议，保留表格与 http(s) 图片。
+ */
 export function sanitizePromoHtml(raw: string): string {
-  return DOMPurify.sanitize(String(raw || ""), {
-    USE_PROFILES: { html: true },
-    ADD_TAGS: ["table", "thead", "tbody", "tr", "th", "td", "colgroup", "col"],
-    ADD_ATTR: ["colspan", "rowspan", "style", "target", "rel"],
-  });
+  let s = String(raw || "");
+  if (!s) return "";
+  s = s.replace(/<\/?(script|style|iframe|object|embed|link|meta|form|input|button|textarea|select)[^>]*>/gi, "");
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+  s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  s = s.replace(/\s(href|src)\s*=\s*(['"]?)\s*javascript:[^'"\s>]*/gi, " $1=$2#");
+  s = s.replace(/\s(href|src)\s*=\s*(['"]?)\s*data:[^'"\s>]*/gi, " $1=$2#");
+  return s;
 }
 
 export async function getPromoByEditToken(token: string) {
