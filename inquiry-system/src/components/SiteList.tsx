@@ -20,6 +20,7 @@ export type SiteRow = {
   spamExtraWords: string;
   wpAdminUrl: string;
   wpUsername: string;
+  wpPassword: string;
   hasWpCredentials: boolean;
   hasWpPassword: boolean;
   enabled: boolean;
@@ -249,7 +250,7 @@ export function SiteList({
       endDate: toDateInputValue(s.endDate),
       wpAdminUrl: s.wpAdminUrl || "",
       wpUsername: s.wpUsername || "",
-      wpPassword: "",
+      wpPassword: s.wpPassword || "",
       enabled: s.enabled,
     });
     setError("");
@@ -997,7 +998,7 @@ export function SiteList({
               </div>
               <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-3">
                 <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  WordPress 运维（可选）：用于「进入后台」与「更新插件」。密码加密存储；遇验证码/双因素时自动登录可能失败。
+                  WordPress 运维（可选）：用于「进入后台」与「更新插件」。遇验证码/双因素时自动登录可能失败。
                 </p>
                 <label className="text-sm block">
                   <span className="text-xs text-[var(--muted)]">后台入口</span>
@@ -1019,16 +1020,12 @@ export function SiteList({
                     />
                   </label>
                   <label className="text-sm">
-                    <span className="text-xs text-[var(--muted)]">
-                      密码
-                      {editing?.hasWpPassword ? "（留空不修改）" : ""}
-                    </span>
+                    <span className="text-xs text-[var(--muted)]">密码</span>
                     <input
-                      type="password"
+                      type="text"
                       value={form.wpPassword}
                       onChange={(e) => setForm({ ...form, wpPassword: e.target.value })}
-                      autoComplete="new-password"
-                      placeholder={editing?.hasWpPassword ? "••••••••" : ""}
+                      autoComplete="off"
                       className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
                     />
                   </label>

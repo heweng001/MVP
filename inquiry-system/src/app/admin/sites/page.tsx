@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SiteList } from "@/components/SiteList";
 import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
-import { hasWpRemoteCreds } from "@/lib/site-credentials";
+import { decryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 import { readPluginVersion } from "@/lib/plugin-meta";
 import {
   SITE_LIST_TABS,
@@ -103,6 +103,7 @@ export default async function SitesPage({
     spamExtraWords: s.spamExtraWords,
     wpAdminUrl: s.wpAdminUrl,
     wpUsername: s.wpUsername,
+    wpPassword: s.wpPasswordEnc ? decryptSecret(s.wpPasswordEnc) : "",
     hasWpCredentials: hasWpRemoteCreds(s),
     hasWpPassword: Boolean(s.wpPasswordEnc),
     enabled: s.enabled,

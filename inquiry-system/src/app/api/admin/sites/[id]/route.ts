@@ -71,8 +71,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       wpUsername:
         body.wpUsername !== undefined ? String(body.wpUsername).trim() : undefined,
       wpPasswordEnc:
-        body.wpPassword !== undefined && String(body.wpPassword) !== ""
-          ? encryptSecret(String(body.wpPassword))
+        body.wpPassword !== undefined
+          ? String(body.wpPassword) !== ""
+            ? encryptSecret(String(body.wpPassword))
+            : ""
           : body.clearWpPassword === true
             ? ""
             : undefined,
