@@ -40,6 +40,14 @@ export type SiteRow = {
     enabled: boolean;
   }[];
   formCount: number;
+  gscSyncEnabled: boolean;
+  gscPropertyUrl: string;
+  gscPeriodDays: number;
+  gscLastSyncAt: string | null;
+  gscLastError: string;
+  gscKeywordCount: number;
+  gscPageCount: number;
+  gscAvgPosition: number | null;
 };
 
 type ClientOpt = {
@@ -79,6 +87,9 @@ const emptyForm = {
   wpUsername: "",
   wpPassword: "",
   enabled: true,
+  gscSyncEnabled: false,
+  gscPropertyUrl: "",
+  gscPeriodDays: 28,
 };
 
 const emptyClientForm = {
@@ -266,6 +277,9 @@ export function SiteList({
       wpUsername: s.wpUsername || "",
       wpPassword: s.wpPassword || "",
       enabled: s.enabled,
+      gscSyncEnabled: s.gscSyncEnabled,
+      gscPropertyUrl: s.gscPropertyUrl || "",
+      gscPeriodDays: s.gscPeriodDays || 28,
     });
     setError("");
   }
@@ -762,13 +776,16 @@ export function SiteList({
                   表单数{sortMark("formCount")}
                 </Link>
               </th>
+              <th className="px-3 py-2" title="Google Search Console 近 N 天缓存（新加坡 worker 同步）">
+                GSC
+              </th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
             {clientGroups.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={10} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -878,6 +895,37 @@ export function SiteList({
                       )}
                     </td>
                     <td className="px-3 py-2">{s.formCount}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {s.gscSyncEnabled ? (
+                        <Link
+                          href={`/admin/sites/${s.id}/gsc`}
+                          className="text-[var(--brand)] hover:underline whitespace-nowrap"
+                          title={
+                            s.gscLastError
+                              ? `同步错误：${s.gscLastError}`
+                              : s.gscLastSyncAt
+                                ? `上次同步 ${formatDateTime(s.gscLastSyncAt)}`
+                                : "已开启，等待新加坡 worker 同步"
+                          }
+                        >
+                          {s.gscLastError ? (
+                            <span className="text-[var(--danger)]">同步失败</span>
+                          ) : s.gscLastSyncAt ? (
+                            <>
+                              {s.gscAvgPosition != null ? `均排 ${s.gscAvgPosition.toFixed(1)}` : "已同步"}
+                              <span className="text-[var(--muted)]">
+                                {" "}
+                                · {s.gscKeywordCount}词/{s.gscPageCount}页
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[var(--muted)]">待同步</span>
+                          )}
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                       {s.hasWpCredentials ? (
                         <button
@@ -1119,6 +1167,53 @@ export function SiteList({
                     />
                   </label>
                 </div>
+              </div>
+              <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
+                <label className="text-sm flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={form.gscSyncEnabled}
+                    onChange={(e) => setForm({ ...form, gscSyncEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium">同步 Google Search Console</span>
+                    <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
+                      由新加坡 worker 每日拉取排名/页面展示数据并回写本系统。需先在 GSC
+                      将该站属性授权给服务账号。
+                    </span>
+                  </span>
+                </label>
+                <label className="text-sm block">
+                  <span className="text-xs text-[var(--muted)]">GSC 属性 URL</span>
+                  <input
+                    value={form.gscPropertyUrl}
+                    onChange={(e) => setForm({ ...form, gscPropertyUrl: e.target.value })}
+                    placeholder="sc-domain:example.com 或 https://www.example.com/"
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
+                  />
+                </label>
+                <label className="text-sm block">
+                  <span className="text-xs text-[var(--muted)]">统计天数</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={form.gscPeriodDays}
+                    onChange={(e) =>
+                      setForm({ ...form, gscPeriodDays: Number(e.target.value) || 28 })
+                    }
+                    className="mt-1 w-28 border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
+                  />
+                </label>
+                {editing ? (
+                  <Link
+                    href={`/admin/sites/${editing.id}/gsc`}
+                    className="text-xs text-[var(--brand)] hover:underline inline-block"
+                  >
+                    查看已同步的 GSC 数据 →
+                  </Link>
+                ) : null}
               </div>
               <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
                 <label className="text-sm flex items-start gap-2">

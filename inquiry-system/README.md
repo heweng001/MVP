@@ -43,6 +43,10 @@ curl -X POST "https://你的域名/api/cron" -H "x-cron-secret: 你的CRON_SECRE
 有效占比   = (标记有效 + 待标记) / 已转发 × 100%
 ```
 
+## GSC 排名同步（新加坡 Worker）
+
+方案 A：新加坡机调用 Google Search Console API，回写本系统。见 [`../docs/GSC新加坡Worker.md`](../docs/GSC新加坡Worker.md) 与 [`../gsc-worker/README.md`](../gsc-worker/README.md)。
+
 ## 生产部署
 
 Node + systemd + Nginx（不用 Docker）。线上：https://mvp.maoniux.com  

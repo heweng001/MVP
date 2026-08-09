@@ -132,6 +132,14 @@ export default async function SitesPage({
       enabled: f.enabled,
     })),
     formCount: s._count.forms,
+    gscSyncEnabled: s.gscSyncEnabled,
+    gscPropertyUrl: s.gscPropertyUrl,
+    gscPeriodDays: s.gscPeriodDays,
+    gscLastSyncAt: s.gscLastSyncAt?.toISOString() ?? null,
+    gscLastError: s.gscLastError,
+    gscKeywordCount: s.gscKeywordCount,
+    gscPageCount: s.gscPageCount,
+    gscAvgPosition: s.gscAvgPosition,
     listTab: siteListTabFrom(s),
   }));
 

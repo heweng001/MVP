@@ -79,6 +79,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
             ? ""
             : undefined,
       enabled: body.enabled !== undefined ? Boolean(body.enabled) : undefined,
+      gscPropertyUrl:
+        body.gscPropertyUrl !== undefined
+          ? String(body.gscPropertyUrl || "").trim()
+          : undefined,
+      gscSyncEnabled:
+        body.gscSyncEnabled !== undefined ? Boolean(body.gscSyncEnabled) : undefined,
+      gscPeriodDays:
+        body.gscPeriodDays !== undefined
+          ? Math.min(90, Math.max(1, Number(body.gscPeriodDays) || 28))
+          : undefined,
     },
   });
 

@@ -1,0 +1,13 @@
+{
+  "name": "gsc-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node sync.mjs",
+    "sync:once": "node sync.mjs"
+  },
+  "dependencies": {
+    "googleapis": "^148.0.0"
+  }
+}

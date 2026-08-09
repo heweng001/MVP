@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { SITE_TIERS, SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
 import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
+import { guessGscPropertyUrl } from "@/lib/gsc-worker-auth";
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
@@ -76,6 +77,9 @@ export async function POST(req: NextRequest) {
         ? encryptSecret(String(body.wpPassword))
         : "",
       enabled: body.enabled !== false,
+      gscPropertyUrl: String(body.gscPropertyUrl || guessGscPropertyUrl(domain)).trim(),
+      gscSyncEnabled: body.gscSyncEnabled === true,
+      gscPeriodDays: Math.min(90, Math.max(1, Number(body.gscPeriodDays) || 28)),
     },
   });
 
