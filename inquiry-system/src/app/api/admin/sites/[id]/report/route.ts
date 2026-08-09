@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/constants";
+import {
+  parseHiddenSections,
+  serializeHiddenSections,
+} from "@/lib/report-editorial";
 import { getReport, parseReportPayload, upsertMonthlyReport } from "@/lib/site-report";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -38,6 +42,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       publicUrl: `${appUrl()}/r/${report.viewToken}`,
       workDone: report.workDone,
       nextPlan: report.nextPlan,
+      highlightsEdit: report.highlightsEdit || "",
+      hiddenSections: parseHiddenSections(report.hiddenSections),
       generatedAt: report.generatedAt.toISOString(),
       payload: parseReportPayload(report.payload),
     },
@@ -70,6 +76,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         publicUrl: `${appUrl()}/r/${report.viewToken}`,
         workDone: report.workDone,
         nextPlan: report.nextPlan,
+        highlightsEdit: report.highlightsEdit || "",
+        hiddenSections: parseHiddenSections(report.hiddenSections),
         generatedAt: report.generatedAt.toISOString(),
       },
     });
@@ -94,12 +102,25 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "请先生成报告" }, { status: 404 });
   }
 
+  const data: {
+    workDone?: string;
+    nextPlan?: string;
+    highlightsEdit?: string;
+    hiddenSections?: string;
+  } = {};
+  if (body.workDone !== undefined) data.workDone = String(body.workDone);
+  if (body.nextPlan !== undefined) data.nextPlan = String(body.nextPlan);
+  if (body.highlightsEdit !== undefined) data.highlightsEdit = String(body.highlightsEdit);
+  if (body.hiddenSections !== undefined) {
+    const keys = Array.isArray(body.hiddenSections)
+      ? body.hiddenSections.map(String)
+      : parseHiddenSections(String(body.hiddenSections));
+    data.hiddenSections = serializeHiddenSections(keys);
+  }
+
   const report = await prisma.siteMonthlyReport.update({
     where: { id: existing.id },
-    data: {
-      workDone: body.workDone !== undefined ? String(body.workDone) : undefined,
-      nextPlan: body.nextPlan !== undefined ? String(body.nextPlan) : undefined,
-    },
+    data,
   });
 
   return NextResponse.json({
@@ -108,6 +129,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       id: report.id,
       workDone: report.workDone,
       nextPlan: report.nextPlan,
+      highlightsEdit: report.highlightsEdit || "",
+      hiddenSections: parseHiddenSections(report.hiddenSections),
     },
   });
 }

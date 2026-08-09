@@ -1174,7 +1174,7 @@ export function SiteList({
                       required
                       value={form.newClientName}
                       onChange={(e) => setForm({ ...form, newClientName: e.target.value })}
-                      placeholder="稍后可在客户列表完善信息"
+                      placeholder="稍后可在「客户」中完善信息"
                       className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5"
                     />
                   </label>

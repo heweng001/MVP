@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { countryCodeToZh } from "./countries";
 import { prisma } from "./prisma";
 import { emptySiteStat, prevMonth, siteMonthStats, type SiteMonthStat } from "./stats";
 import { countWpPublicPages } from "./wp-page-count";
@@ -33,6 +34,23 @@ export type ReportRowLanding = {
   engagedSessions: number;
   conversions: number;
   engagementRate: number;
+  pageViews?: number;
+  /** 平均互动时长（秒） */
+  avgEngagementTimeSec?: number;
+  bounceRate?: number;
+};
+
+export type ReportRowCountry = {
+  countryId: string;
+  country: string;
+  /** 展示用中文名（组装时填） */
+  countryLabel?: string;
+  sessions: number;
+  engagedSessions: number;
+  users: number;
+  pageViews: number;
+  engagementRate: number;
+  conversions: number;
 };
 
 export type ReportKpiBlock = {
@@ -54,15 +72,19 @@ export type ReportKpiBlock = {
 export type ReportFunnelStep = {
   key: string;
   label: string;
-  value: number;
+  /** null = 数据不可用（如 WP 页面总数拉取失败） */
+  value: number | null;
+  /** 上月同口径，供环比；无上月则为 null/缺省 */
+  prevValue?: number | null;
   hint?: string;
 };
 
-/** 搜索可见性漏斗（页面 → 可见页 → 关键词层级） */
+/** 搜索可见性：上=页面覆盖，下=关键词排名（已拆分，避免页/词混算转化） */
 export type SearchVisibilityFunnel = {
   title: string;
-  steps: ReportFunnelStep[];
   sitePageSource: "wp_rest" | "unknown";
+  pageSteps: ReportFunnelStep[];
+  keywordSteps: ReportFunnelStep[];
 };
 
 /** 流量与询盘漏斗 */
@@ -100,6 +122,9 @@ export type SiteReportPayload = {
   topPages: ReportRowPage[];
   topChannels: ReportRowChannel[];
   topLandings: ReportRowLanding[];
+  /** GA 按 pagePath 的主要浏览页（含平均互动时长） */
+  topGaPages: ReportRowLanding[];
+  topCountries: ReportRowCountry[];
   highlights: string[];
 };
 
@@ -137,28 +162,66 @@ function resolveEngagedSessions(
   return 0;
 }
 
+function withPrev(
+  steps: ReportFunnelStep[],
+  prevByKey?: Record<string, number | null | undefined> | null,
+): ReportFunnelStep[] {
+  if (!prevByKey) return steps;
+  return steps.map((s) => ({
+    ...s,
+    prevValue:
+      s.prevValue !== undefined
+        ? s.prevValue
+        : prevByKey[s.key] !== undefined
+          ? prevByKey[s.key]!
+          : null,
+  }));
+}
+
+function funnelPrevByKey(
+  funnel: SearchVisibilityFunnel | null | undefined,
+  kpiPrev?: ReportKpiBlock | null,
+): Record<string, number | null | undefined> {
+  const map: Record<string, number | null | undefined> = {};
+  for (const s of funnel?.pageSteps || []) map[s.key] = s.value;
+  for (const s of funnel?.keywordSteps || []) map[s.key] = s.value;
+  // 旧快照无分层时，用 KPI 补可见页 / 有展示词
+  if (map.visiblePages == null && kpiPrev?.gscPageCount != null) {
+    map.visiblePages = kpiPrev.gscPageCount;
+  }
+  if (map.keywordsShown == null && kpiPrev?.gscKeywordCount != null) {
+    map.keywordsShown = kpiPrev.gscKeywordCount;
+  }
+  return map;
+}
+
+export type SearchFunnelCounts = {
+  keywordsShown?: number;
+  top100?: number;
+  top30?: number;
+};
+
 function buildSearchFunnel(
   sitePageCount: number | null,
   visiblePages: number,
   keywords: ReportRowKeyword[],
+  prevByKey?: Record<string, number | null | undefined> | null,
+  counts?: SearchFunnelCounts | null,
 ): SearchVisibilityFunnel {
-  const withImp = keywords.filter((k) => k.impressions > 0).length;
-  const pages =
-    sitePageCount != null && sitePageCount > 0
-      ? sitePageCount
-      : Math.max(visiblePages, 0);
-  return {
-    title: "搜索可见性漏斗",
-    sitePageSource: sitePageCount != null && sitePageCount > 0 ? "wp_rest" : "unknown",
-    steps: [
+  const withImp = counts?.keywordsShown ?? keywords.filter((k) => k.impressions > 0).length;
+  const top100 = counts?.top100 ?? countKeywordsWithin(keywords, 100);
+  const top30 = counts?.top30 ?? countKeywordsWithin(keywords, 30);
+  const hasWp = sitePageCount != null && sitePageCount > 0;
+  const fromSummary = counts?.keywordsShown != null;
+  const pageSteps = withPrev(
+    [
       {
         key: "sitePages",
         label: "网站页面数",
-        value: pages,
-        hint:
-          sitePageCount != null && sitePageCount > 0
-            ? "WordPress 已发布文章+页面"
-            : "未能拉取 WP 页面总数，暂用有展示页数占位",
+        value: hasWp ? sitePageCount : null,
+        hint: hasWp
+          ? "WordPress 已发布文章+页面"
+          : "未能拉取 WP 页面总数，故不展示（≠用可见页占位）",
       },
       {
         key: "visiblePages",
@@ -166,75 +229,145 @@ function buildSearchFunnel(
         value: visiblePages,
         hint: "GSC 同期有展示的页面数（≠完整收录）",
       },
+    ],
+    prevByKey,
+  );
+  const keywordSteps = withPrev(
+    [
       {
         key: "keywordsShown",
         label: "有展示关键词",
         value: withImp,
-        hint: "GSC 近周期有展示的查询词",
+        hint: fromSummary
+          ? "GSC 同期有展示查询词（全量统计，非仅 Top 详情）"
+          : "GSC 近周期有展示的查询词（若仅同步了部分词，各层可能失真）",
       },
       {
         key: "top100",
         label: "排名前 100",
-        value: countKeywordsWithin(keywords, 100),
+        value: top100,
       },
       {
         key: "top30",
         label: "排名前 30",
-        value: countKeywordsWithin(keywords, 30),
-      },
-      {
-        key: "top10",
-        label: "排名前 10",
-        value: countKeywordsWithin(keywords, 10),
+        value: top30,
       },
     ],
+    prevByKey,
+  );
+  return {
+    title: "搜索可见性",
+    sitePageSource: hasWp ? "wp_rest" : "unknown",
+    pageSteps,
+    keywordSteps,
   };
+}
+
+/** 兼容旧快照：单一 steps 列表 → 上下两段；去掉前 10 */
+function normalizeSearchFunnel(
+  raw: (SearchVisibilityFunnel & { steps?: ReportFunnelStep[] }) | null | undefined,
+  visiblePages: number,
+  keywords: ReportRowKeyword[],
+  prevByKey?: Record<string, number | null | undefined> | null,
+): SearchVisibilityFunnel {
+  const legacySteps = Array.isArray(raw?.steps) ? raw!.steps! : [];
+  const hasSplit =
+    (raw?.pageSteps?.length ?? 0) > 0 || (raw?.keywordSteps?.length ?? 0) > 0;
+
+  if (hasSplit) {
+    const pageSteps = withPrev(
+      (raw!.pageSteps || []).map((s) => ({ ...s })),
+      prevByKey,
+    );
+    const keywordSteps = withPrev(
+      (raw!.keywordSteps || [])
+        .filter((s) => s.key !== "top10")
+        .map((s) => ({ ...s })),
+      prevByKey,
+    );
+    return {
+      title: raw!.title || "搜索可见性",
+      sitePageSource: raw!.sitePageSource || "unknown",
+      pageSteps:
+        pageSteps.length > 0
+          ? pageSteps
+          : buildSearchFunnel(null, visiblePages, keywords, prevByKey).pageSteps,
+      keywordSteps:
+        keywordSteps.length > 0
+          ? keywordSteps
+          : buildSearchFunnel(null, visiblePages, keywords, prevByKey).keywordSteps,
+    };
+  }
+
+  if (legacySteps.length > 0) {
+    const pageKeys = new Set(["sitePages", "visiblePages"]);
+    const keywordKeys = new Set(["keywordsShown", "top100", "top30"]);
+    return {
+      title: raw?.title || "搜索可见性",
+      sitePageSource: raw?.sitePageSource || "unknown",
+      pageSteps: withPrev(
+        legacySteps.filter((s) => pageKeys.has(s.key)).map((s) => ({ ...s })),
+        prevByKey,
+      ),
+      keywordSteps: withPrev(
+        legacySteps.filter((s) => keywordKeys.has(s.key)).map((s) => ({ ...s })),
+        prevByKey,
+      ),
+    };
+  }
+
+  return buildSearchFunnel(null, visiblePages, keywords, prevByKey);
 }
 
 function buildTrafficFunnel(
   pageViews: number,
-  users: number,
+  sessions: number,
   engagedSessions: number,
   inquiry: SiteMonthStat,
+  prevByKey?: Record<string, number | null | undefined> | null,
 ): TrafficInquiryFunnel {
   return {
     title: "流量与询盘漏斗",
-    steps: [
-      {
-        key: "pageViews",
-        label: "页面浏览量",
-        value: pageViews,
-        hint: "GA4 screenPageViews",
-      },
-      {
-        key: "users",
-        label: "用户数",
-        value: users,
-      },
-      {
-        key: "engagedSessions",
-        label: "互动会话",
-        value: engagedSessions,
-        hint: "GA4 engagedSessions",
-      },
-      {
-        key: "inquiries",
-        label: "询盘数",
-        value: inquiry.total,
-        hint: "自然月提交总数",
-      },
-      {
-        key: "nonInvalid",
-        label: "非无效询盘",
-        value: inquiry.effective,
-        hint: "标记有效 + 未标记（待标记）",
-      },
-      {
-        key: "valid",
-        label: "有效询盘",
-        value: inquiry.valid,
-      },
-    ],
+    steps: withPrev(
+      [
+        {
+          key: "pageViews",
+          label: "页面浏览量",
+          value: pageViews,
+          hint: "GA4 screenPageViews",
+        },
+        {
+          key: "sessions",
+          label: "会话",
+          value: sessions,
+          hint: "GA4 sessions",
+        },
+        {
+          key: "engagedSessions",
+          label: "互动会话",
+          value: engagedSessions,
+          hint: "GA4 engagedSessions",
+        },
+        {
+          key: "inquiries",
+          label: "询盘数",
+          value: inquiry.total,
+          hint: "自然月提交总数",
+        },
+        {
+          key: "nonInvalid",
+          label: "非无效询盘",
+          value: inquiry.effective,
+          hint: "标记有效 + 未标记（待标记）",
+        },
+        {
+          key: "valid",
+          label: "有效询盘",
+          value: inquiry.valid,
+        },
+      ],
+      prevByKey,
+    ),
   };
 }
 
@@ -317,14 +450,16 @@ export function parseReportPayload(raw: string): SiteReportPayload | null {
   return ensureReportFunnels(p);
 }
 
-/** 兼容旧快照：缺少漏斗字段时按 kpi / 词表补齐 */
+/** 兼容旧快照：缺少漏斗字段时按 kpi / 词表补齐；搜索漏斗规范为上下两段 */
 export function ensureReportFunnels(payload: SiteReportPayload): SiteReportPayload {
   const keywords = payload.topKeywords || [];
   const visible = payload.kpi?.gscPageCount ?? 0;
-  const searchFunnel =
-    payload.searchFunnel?.steps?.length
-      ? payload.searchFunnel
-      : buildSearchFunnel(null, visible, keywords);
+  const rawSf = payload.searchFunnel as SearchVisibilityFunnel & {
+    steps?: ReportFunnelStep[];
+  };
+  // 旧报告无分层 prevValue 时，用上月 KPI 补可见页 / 有展示词
+  const prevByKey = funnelPrevByKey(null, payload.prev);
+  const searchFunnel = normalizeSearchFunnel(rawSf, visible, keywords, prevByKey);
   const engaged = resolveEngagedSessions(
     payload.kpi?.gaEngagedSessions ?? 0,
     payload.kpi?.gaSessions ?? 0,
@@ -334,15 +469,25 @@ export function ensureReportFunnels(payload: SiteReportPayload): SiteReportPaylo
     payload.kpi?.gaPageViews && payload.kpi.gaPageViews > 0
       ? payload.kpi.gaPageViews
       : payload.kpi?.gaSessions ?? 0;
-  const trafficFunnel =
-    payload.trafficFunnel?.steps?.length
-      ? payload.trafficFunnel
-      : buildTrafficFunnel(
-          pageViews,
-          payload.kpi?.gaUsers ?? 0,
-          engaged,
-          payload.kpi?.inquiry ?? emptySiteStat(),
-        );
+  const sessions = payload.kpi?.gaSessions ?? 0;
+  const prevTraffic: Record<string, number | null | undefined> = {};
+  for (const s of payload.trafficFunnel?.steps || []) prevTraffic[s.key] = s.prevValue;
+  // 旧快照可能是「浏览量→用户→互动」；统一按 KPI 重算为「浏览量→会话→互动」
+  const trafficFunnel = buildTrafficFunnel(
+    pageViews,
+    sessions,
+    engaged,
+    payload.kpi?.inquiry ?? emptySiteStat(),
+    {
+      ...prevTraffic,
+      pageViews: prevTraffic.pageViews ?? payload.prev?.gaPageViews,
+      sessions: prevTraffic.sessions ?? payload.prev?.gaSessions,
+      engagedSessions: prevTraffic.engagedSessions ?? payload.prev?.gaEngagedSessions,
+      inquiries: prevTraffic.inquiries ?? payload.prev?.inquiry?.total,
+      nonInvalid: prevTraffic.nonInvalid ?? payload.prev?.inquiry?.effective,
+      valid: prevTraffic.valid ?? payload.prev?.inquiry?.valid,
+    },
+  );
   return {
     ...payload,
     meta: {
@@ -363,6 +508,8 @@ export function ensureReportFunnels(payload: SiteReportPayload): SiteReportPaylo
     },
     searchFunnel,
     trafficFunnel,
+    topGaPages: payload.topGaPages || [],
+    topCountries: payload.topCountries || [],
   };
 }
 
@@ -373,6 +520,13 @@ type MonthGscJson = {
     avgPosition?: number | null;
     keywordCount?: number;
     pageCount?: number;
+    /** 全量统计（seo-worker 分页拉取后写入）；优先于 keywords[] 截断列表 */
+    top100Count?: number;
+    top30Count?: number;
+    top10Count?: number;
+    queriesFetched?: number;
+    pagesFetched?: number;
+    truncated?: boolean;
   };
   keywords?: ReportRowKeyword[];
   pages?: ReportRowPage[];
@@ -389,11 +543,44 @@ type MonthGaJson = {
     engagedSessions?: number;
     engagementRate?: number | null;
     conversions?: number;
+    avgEngagementTimeSec?: number;
   };
   landingPages?: ReportRowLanding[];
+  pages?: ReportRowLanding[];
   channels?: ReportRowChannel[];
+  countries?: ReportRowCountry[];
   error?: string;
 };
+
+function normalizeLandingRow(r: ReportRowLanding): ReportRowLanding {
+  return {
+    pagePath: String(r.pagePath || "").trim(),
+    sessions: Math.max(0, Math.round(Number(r.sessions) || 0)),
+    engagedSessions: Math.max(0, Math.round(Number(r.engagedSessions) || 0)),
+    conversions: Math.max(0, Math.round(Number(r.conversions) || 0)),
+    engagementRate: Number(r.engagementRate) || 0,
+    pageViews: Math.max(0, Math.round(Number(r.pageViews) || 0)),
+    avgEngagementTimeSec: Math.max(0, Number(r.avgEngagementTimeSec) || 0),
+    bounceRate: Math.max(0, Number(r.bounceRate) || 0),
+  };
+}
+
+function normalizeCountryRow(r: ReportRowCountry): ReportRowCountry {
+  const countryId = String(r.countryId || "").trim().toUpperCase();
+  const country = String(r.country || "").trim();
+  const label = countryId ? countryCodeToZh(countryId) : country;
+  return {
+    countryId,
+    country,
+    countryLabel: label && label !== countryId ? label : country || countryId || "—",
+    sessions: Math.max(0, Math.round(Number(r.sessions) || 0)),
+    engagedSessions: Math.max(0, Math.round(Number(r.engagedSessions) || 0)),
+    users: Math.max(0, Math.round(Number(r.users) || 0)),
+    pageViews: Math.max(0, Math.round(Number(r.pageViews) || 0)),
+    engagementRate: Number(r.engagementRate) || 0,
+    conversions: Math.max(0, Math.round(Number(r.conversions) || 0)),
+  };
+}
 
 function daysInclusive(startDate: string, endDate: string) {
   if (!startDate || !endDate) return 0;
@@ -450,9 +637,17 @@ export async function buildReportPayload(
   }
 
   const keywords: ReportRowKeyword[] = Array.isArray(gsc.keywords) ? gsc.keywords : [];
-  const pages: ReportRowPage[] = Array.isArray(gsc.pages) ? gsc.pages : [];
+  const gscPages: ReportRowPage[] = Array.isArray(gsc.pages) ? gsc.pages : [];
   const channels: ReportRowChannel[] = Array.isArray(ga.channels) ? ga.channels : [];
-  const landings: ReportRowLanding[] = Array.isArray(ga.landingPages) ? ga.landingPages : [];
+  const landings = (Array.isArray(ga.landingPages) ? ga.landingPages : [])
+    .map(normalizeLandingRow)
+    .filter((r) => r.pagePath);
+  const gaPages = (Array.isArray(ga.pages) ? ga.pages : [])
+    .map(normalizeLandingRow)
+    .filter((r) => r.pagePath);
+  const countries = (Array.isArray(ga.countries) ? ga.countries : [])
+    .map(normalizeCountryRow)
+    .filter((r) => r.countryId || r.country);
 
   const gscClicks = sumClicks(keywords);
   const gscImpressions = sumImpressions(keywords);
@@ -460,7 +655,7 @@ export async function buildReportPayload(
   const gscAvgPosition =
     gsc.summary?.avgPosition != null ? Number(gsc.summary.avgPosition) : null;
   const gscKeywordCount = gsc.summary?.keywordCount ?? keywords.length;
-  const gscPageCount = gsc.summary?.pageCount ?? pages.length;
+  const gscPageCount = gsc.summary?.pageCount ?? gscPages.length;
 
   const gaSessions = Math.max(0, Math.round(Number(ga.summary?.sessions) || 0));
   const gaUsers = Math.max(0, Math.round(Number(ga.summary?.users) || 0));
@@ -476,7 +671,7 @@ export async function buildReportPayload(
   const inquiry = inquiryRows[0] || emptySiteStat(siteId);
 
   const wpPages = await countWpPublicPages(site);
-  const visiblePages = Math.max(gscPageCount, pages.length);
+  const visiblePages = Math.max(gscPageCount, gscPages.length);
 
   const kpi: ReportKpiBlock = {
     gscClicks,
@@ -494,21 +689,57 @@ export async function buildReportPayload(
     inquiry,
   };
 
-  const searchFunnel = buildSearchFunnel(wpPages?.total ?? null, visiblePages, keywords);
-  const trafficFunnel = buildTrafficFunnel(gaPageViews, gaUsers, gaEngagedSessions, inquiry);
-  if (gaPageViewsRaw <= 0 && gaSessions > 0) {
-    const step = trafficFunnel.steps.find((s) => s.key === "pageViews");
-    if (step) {
-      step.hint = "该月快照无 screenPageViews，暂用会话数占位";
-    }
-  }
-
   const pm = prevMonth(year, month);
   const prevReport = await prisma.siteMonthlyReport.findUnique({
     where: { siteId_year_month: { siteId, year: pm.year, month: pm.month } },
   });
   const prevPayload = prevReport ? parsePayload(prevReport.payload) : null;
   const prev = prevPayload?.kpi ?? null;
+  const prevSearchNormalized = prevPayload
+    ? normalizeSearchFunnel(
+        prevPayload.searchFunnel as SearchVisibilityFunnel & { steps?: ReportFunnelStep[] },
+        prev?.gscPageCount ?? 0,
+        prevPayload.topKeywords || [],
+        null,
+      )
+    : null;
+  // 仅当新版 worker 写入 top100/top30 计数时采用 summary（避免旧快照 keywordCount=截断条数）
+  const funnelCounts: SearchFunnelCounts | null =
+    gsc.summary?.top100Count != null && gsc.summary?.top30Count != null
+      ? {
+          keywordsShown: gsc.summary.keywordCount ?? undefined,
+          top100: gsc.summary.top100Count,
+          top30: gsc.summary.top30Count,
+        }
+      : null;
+  const searchFunnel = buildSearchFunnel(
+    wpPages?.total ?? null,
+    visiblePages,
+    keywords,
+    funnelPrevByKey(prevSearchNormalized, prev),
+    funnelCounts,
+  );
+
+  const trafficFunnel = buildTrafficFunnel(
+    gaPageViews,
+    gaSessions,
+    gaEngagedSessions,
+    inquiry,
+    {
+      pageViews: prev?.gaPageViews,
+      sessions: prev?.gaSessions,
+      engagedSessions: prev?.gaEngagedSessions,
+      inquiries: prev?.inquiry?.total,
+      nonInvalid: prev?.inquiry?.effective,
+      valid: prev?.inquiry?.valid,
+    },
+  );
+  if (gaPageViewsRaw <= 0 && gaSessions > 0) {
+    const step = trafficFunnel.steps.find((s) => s.key === "pageViews");
+    if (step) {
+      step.hint = "该月快照无 screenPageViews，暂用会话数占位";
+    }
+  }
 
   const startDate = seoSnap?.startDate || gsc.startDate || ga.startDate || "";
   const endDate = seoSnap?.endDate || gsc.endDate || ga.endDate || "";
@@ -542,9 +773,11 @@ export async function buildReportPayload(
     trafficFunnel,
     topKeywords: keywords.slice(0, 10),
     opportunityKeywords: pickOpportunity(keywords),
-    topPages: pages.slice(0, 10),
+    topPages: gscPages.slice(0, 10),
     topChannels: channels.slice(0, 10),
     topLandings: landings.slice(0, 10),
+    topGaPages: gaPages.slice(0, 10),
+    topCountries: countries.slice(0, 15),
     highlights: buildHighlights(kpi, prev),
   };
 }
@@ -566,6 +799,10 @@ export async function upsertMonthlyReport(
   const preserveNotes = opts?.preserveNotes !== false;
   const workDone = preserveNotes && existing ? existing.workDone : "";
   const nextPlan = preserveNotes && existing ? existing.nextPlan : "";
+  const highlightsEdit =
+    preserveNotes && existing ? existing.highlightsEdit || "" : "";
+  const hiddenSections =
+    preserveNotes && existing ? existing.hiddenSections || "[]" : "[]";
 
   const row = await prisma.siteMonthlyReport.upsert({
     where: { siteId_year_month: { siteId, year, month } },
@@ -577,12 +814,16 @@ export async function upsertMonthlyReport(
       payload: JSON.stringify(payload),
       workDone,
       nextPlan,
+      highlightsEdit,
+      hiddenSections,
       generatedAt: new Date(),
     },
     update: {
       viewToken,
       payload: JSON.stringify(payload),
-      ...(preserveNotes ? {} : { workDone: "", nextPlan: "" }),
+      ...(preserveNotes
+        ? {}
+        : { workDone: "", nextPlan: "", highlightsEdit: "", hiddenSections: "[]" }),
       generatedAt: new Date(),
     },
   });

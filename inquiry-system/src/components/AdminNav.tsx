@@ -6,10 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 const links = [
   { href: "/admin", label: "统计概览" },
   { href: "/admin/inquiries", label: "询盘列表" },
-  { href: "/admin/clients", label: "客户列表" },
   { href: "/admin/sites", label: "网站列表" },
   { href: "/admin/promos", label: "信息核对" },
   { href: "/admin/report-template", label: "报表模版" },
+  { href: "/admin/clients", label: "客户" },
   { href: "/admin/blacklist", label: "黑名单" },
   { href: "/admin/settings", label: "发件设置" },
 ];

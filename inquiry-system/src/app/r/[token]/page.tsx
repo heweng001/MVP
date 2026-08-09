@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { SiteMonthlyReportView } from "@/components/SiteMonthlyReportView";
 import { PrintButton } from "@/components/PrintButton";
+import { parseHiddenSections } from "@/lib/report-editorial";
 import { getReportByToken, parseReportPayload } from "@/lib/site-report";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -32,6 +33,8 @@ export default async function PublicReportPage({ params }: Ctx) {
             payload={payload}
             workDone={report.workDone}
             nextPlan={report.nextPlan}
+            highlightsEdit={report.highlightsEdit || ""}
+            hiddenSections={parseHiddenSections(report.hiddenSections)}
           />
         </div>
       </div>

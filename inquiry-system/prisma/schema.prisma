@@ -155,7 +155,7 @@ model SiteMonthSeoSnapshot {
   endDate   String   @default("")
   /// JSON：keywords / pages / summary
   gscJson   String   @default("")
-  /// JSON：summary / landingPages / channels
+  /// JSON：summary / landingPages / pages / channels / countries
   gaJson    String   @default("")
   gscError  String   @default("")
   gaError   String   @default("")
@@ -178,6 +178,10 @@ model SiteMonthlyReport {
   payload     String
   workDone    String   @default("")
   nextPlan    String   @default("")
+  /// 人工/AI 定稿的本月要点（一行一条）；空则展示 payload 自动生成版
+  highlightsEdit String @default("")
+  /// JSON string[]：对客户隐藏的板块 key（见 report-editorial）
+  hiddenSections String @default("[]")
   generatedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

@@ -107,7 +107,9 @@ async function syncSiteMonth(base, secret, searchconsole, analyticsdata, site, d
             endDate: payload.endDate,
             summary: payload.summary,
             landingPages: payload.landingPages,
+            pages: payload.pages,
             channels: payload.channels,
+            countries: payload.countries,
           },
         },
       });
@@ -146,10 +148,14 @@ async function main() {
   const defaults = {
     gscPeriodDays: Number(env("GSC_PERIOD_DAYS", "28")) || 28,
     gaPeriodDays: Number(env("GA_PERIOD_DAYS", "28")) || 28,
-    topQueries: Number(env("GSC_TOP_QUERIES", "250")) || 250,
-    topPages: Number(env("GSC_TOP_PAGES", "250")) || 250,
+    // 入库详情条数（点击 Top）；漏斗统计另按 maxQueries 分页拉全量
+    topQueries: Number(env("GSC_TOP_QUERIES", "500")) || 500,
+    topPages: Number(env("GSC_TOP_PAGES", "500")) || 500,
+    maxQueries: Number(env("GSC_MAX_QUERIES", "25000")) || 25000,
+    maxPages: Number(env("GSC_MAX_PAGES", "25000")) || 25000,
     topLanding: Number(env("GA_TOP_LANDING", "100")) || 100,
     topChannels: Number(env("GA_TOP_CHANNELS", "20")) || 20,
+    topCountries: Number(env("GA_TOP_COUNTRIES", "25")) || 25,
     delayMs: Number(env("SEO_SITE_DELAY_MS", env("GSC_SITE_DELAY_MS", "800"))) || 800,
   };
 

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SiteMonthlyReportView } from "@/components/SiteMonthlyReportView";
 import { SiteReportAdminBar } from "@/components/SiteReportAdminBar";
 import { appUrl } from "@/lib/constants";
+import { parseHiddenSections } from "@/lib/report-editorial";
 import { getReport, parseReportPayload } from "@/lib/site-report";
 
 type Ctx = {
@@ -66,6 +67,9 @@ export default async function SiteReportPage({ params, searchParams }: Ctx) {
         publicUrl={report ? `${appUrl()}/r/${report.viewToken}` : ""}
         workDone={report?.workDone || ""}
         nextPlan={report?.nextPlan || ""}
+        highlightsEdit={report?.highlightsEdit || ""}
+        autoHighlights={payload?.highlights || []}
+        hiddenSections={parseHiddenSections(report?.hiddenSections)}
         hasReport={Boolean(report && payload)}
       />
 
@@ -74,6 +78,8 @@ export default async function SiteReportPage({ params, searchParams }: Ctx) {
           payload={payload}
           workDone={report?.workDone || ""}
           nextPlan={report?.nextPlan || ""}
+          highlightsEdit={report?.highlightsEdit || ""}
+          hiddenSections={parseHiddenSections(report?.hiddenSections)}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--line)] bg-white px-4 py-10 text-center text-sm text-[var(--muted)]">

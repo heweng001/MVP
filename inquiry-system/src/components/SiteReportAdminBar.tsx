@@ -1,7 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  REPORT_SECTION_DEFS,
+  type ReportSectionKey,
+} from "@/lib/report-editorial";
 import { CopyField } from "./CopyField";
 
 export function SiteReportAdminBar({
@@ -11,6 +15,9 @@ export function SiteReportAdminBar({
   publicUrl,
   workDone: initialWork,
   nextPlan: initialPlan,
+  highlightsEdit: initialHighlightsEdit,
+  autoHighlights = [],
+  hiddenSections: initialHidden = [],
   hasReport,
 }: {
   siteId: string;
@@ -19,14 +26,35 @@ export function SiteReportAdminBar({
   publicUrl: string;
   workDone: string;
   nextPlan: string;
+  highlightsEdit: string;
+  autoHighlights?: string[];
+  hiddenSections?: ReportSectionKey[];
   hasReport: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [workDone, setWorkDone] = useState(initialWork);
   const [nextPlan, setNextPlan] = useState(initialPlan);
+  const defaultHighlightsText = useMemo(() => {
+    if (initialHighlightsEdit.trim()) return initialHighlightsEdit;
+    return autoHighlights.join("\n");
+  }, [initialHighlightsEdit, autoHighlights]);
+  const [highlightsEdit, setHighlightsEdit] = useState(defaultHighlightsText);
+  const [hidden, setHidden] = useState<Set<ReportSectionKey>>(
+    () => new Set(initialHidden),
+  );
+
+  function toggleSection(key: ReportSectionKey) {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   async function generate(rotateToken = false) {
     setBusy(true);
@@ -43,7 +71,7 @@ export function SiteReportAdminBar({
       setErr(data.error || "生成失败");
       return;
     }
-    setMsg(rotateToken ? "已刷新分享链接" : "报告已生成/刷新");
+    setMsg(rotateToken ? "已刷新分享链接" : "报告已生成/刷新（文案与板块设置已保留）");
     router.refresh();
   }
 
@@ -55,7 +83,14 @@ export function SiteReportAdminBar({
     const res = await fetch(`/api/admin/sites/${siteId}/report`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, month, workDone, nextPlan }),
+      body: JSON.stringify({
+        year,
+        month,
+        workDone,
+        nextPlan,
+        highlightsEdit,
+        hiddenSections: [...hidden],
+      }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
@@ -63,8 +98,44 @@ export function SiteReportAdminBar({
       setErr(data.error || "保存失败");
       return;
     }
-    setMsg("已保存工作与计划");
+    setMsg("已保存文案与板块设置");
     router.refresh();
+  }
+
+  async function runAiDraft(apply: boolean) {
+    setAiBusy(true);
+    setErr("");
+    setMsg("");
+    const res = await fetch(`/api/admin/sites/${siteId}/report/ai-draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, month, apply }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setAiBusy(false);
+    if (!res.ok) {
+      setErr(data.error || "AI 生成失败");
+      return;
+    }
+    if (typeof data.highlightsEdit === "string") {
+      setHighlightsEdit(data.highlightsEdit);
+    } else if (Array.isArray(data.highlights)) {
+      setHighlightsEdit(data.highlights.join("\n"));
+    }
+    if (typeof data.nextPlan === "string") {
+      setNextPlan(data.nextPlan);
+    }
+    setMsg(
+      apply
+        ? "AI 草稿已生成并保存，请核对后如需再改可点「保存文案」"
+        : "AI 草稿已填入下方，请核对后点「保存文案与板块」",
+    );
+    if (apply) router.refresh();
+  }
+
+  function restoreAutoHighlights() {
+    setHighlightsEdit(autoHighlights.join("\n"));
+    setMsg("已恢复为自动要点草稿（需保存后对客户生效；清空并保存则始终跟自动稿）");
   }
 
   return (
@@ -104,7 +175,7 @@ export function SiteReportAdminBar({
         </label>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || aiBusy}
           onClick={() => generate(false)}
           className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
         >
@@ -114,11 +185,19 @@ export function SiteReportAdminBar({
           <>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || aiBusy}
               onClick={() => generate(true)}
               className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
             >
               更换分享链接
+            </button>
+            <button
+              type="button"
+              disabled={busy || aiBusy}
+              onClick={() => runAiDraft(false)}
+              className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              {aiBusy ? "AI 撰写中…" : "AI 生成要点与计划"}
             </button>
             {publicUrl ? (
               <a
@@ -143,32 +222,79 @@ export function SiteReportAdminBar({
       ) : null}
 
       {hasReport ? (
-        <form onSubmit={saveNotes} className="grid md:grid-cols-2 gap-3">
-          <label className="text-sm block">
-            <span className="text-xs text-[var(--muted)]">本月已做工作</span>
-            <textarea
-              value={workDone}
-              onChange={(e) => setWorkDone(e.target.value)}
-              rows={5}
-              className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-sm block">
-            <span className="text-xs text-[var(--muted)]">下月计划</span>
-            <textarea
-              value={nextPlan}
-              onChange={(e) => setNextPlan(e.target.value)}
-              rows={5}
-              className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
-            />
-          </label>
-          <div className="md:col-span-2">
+        <form onSubmit={saveNotes} className="space-y-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="text-sm block md:col-span-2">
+              <span className="text-xs text-[var(--muted)] flex flex-wrap items-center gap-2">
+                本月要点（一行一条；保存后覆盖自动稿，刷新数据不会冲掉）
+                <button
+                  type="button"
+                  className="text-[var(--brand)] underline"
+                  onClick={restoreAutoHighlights}
+                >
+                  填入自动稿
+                </button>
+              </span>
+              <textarea
+                value={highlightsEdit}
+                onChange={(e) => setHighlightsEdit(e.target.value)}
+                rows={5}
+                className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-sm block">
+              <span className="text-xs text-[var(--muted)]">本月已做工作</span>
+              <textarea
+                value={workDone}
+                onChange={(e) => setWorkDone(e.target.value)}
+                rows={5}
+                className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-sm block">
+              <span className="text-xs text-[var(--muted)]">下月计划（可由 AI 预填）</span>
+              <textarea
+                value={nextPlan}
+                onChange={(e) => setNextPlan(e.target.value)}
+                rows={5}
+                className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
+              />
+            </label>
+          </div>
+
+          <fieldset className="rounded-lg border border-[var(--line)] p-3">
+            <legend className="text-xs text-[var(--muted)] px-1">
+              对客户隐藏的板块（勾选=不显示）
+            </legend>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-1">
+              {REPORT_SECTION_DEFS.map((s) => (
+                <label key={s.key} className="text-xs flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hidden.has(s.key)}
+                    onChange={() => toggleSection(s.key)}
+                  />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="flex flex-wrap gap-2">
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || aiBusy}
               className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
             >
-              保存文案
+              保存文案与板块
+            </button>
+            <button
+              type="button"
+              disabled={busy || aiBusy}
+              onClick={() => runAiDraft(true)}
+              className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              AI 生成并保存
             </button>
           </div>
         </form>

@@ -87,7 +87,7 @@ export default async function AdminHome({
         <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--muted)]">
           还没有接入任何站点。请先创建{" "}
           <Link href="/admin/clients" className="text-[var(--brand)] underline underline-offset-2">
-            客户列表
+            客户
           </Link>{" "}
           和{" "}
           <Link href="/admin/sites" className="text-[var(--brand)] underline underline-offset-2">
