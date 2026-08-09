@@ -80,6 +80,9 @@ export async function POST(req: NextRequest) {
       gscPropertyUrl: String(body.gscPropertyUrl || guessGscPropertyUrl(domain)).trim(),
       gscSyncEnabled: body.gscSyncEnabled === true,
       gscPeriodDays: Math.min(90, Math.max(1, Number(body.gscPeriodDays) || 28)),
+      gaPropertyId: String(body.gaPropertyId || "").trim(),
+      gaSyncEnabled: body.gaSyncEnabled === true,
+      gaPeriodDays: Math.min(90, Math.max(1, Number(body.gaPeriodDays) || 28)),
     },
   });
 

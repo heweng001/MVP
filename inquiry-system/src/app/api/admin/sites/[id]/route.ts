@@ -89,6 +89,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         body.gscPeriodDays !== undefined
           ? Math.min(90, Math.max(1, Number(body.gscPeriodDays) || 28))
           : undefined,
+      gaPropertyId:
+        body.gaPropertyId !== undefined
+          ? String(body.gaPropertyId || "").trim()
+          : undefined,
+      gaSyncEnabled:
+        body.gaSyncEnabled !== undefined ? Boolean(body.gaSyncEnabled) : undefined,
+      gaPeriodDays:
+        body.gaPeriodDays !== undefined
+          ? Math.min(90, Math.max(1, Number(body.gaPeriodDays) || 28))
+          : undefined,
     },
   });
 

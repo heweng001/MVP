@@ -104,6 +104,21 @@ model Site {
   gscAvgPosition  Float?
   /// 同步使用的统计天数
   gscPeriodDays   Int       @default(28)
+  /// GA4 媒体资源数字 ID（非 G-XXXX）
+  gaPropertyId    String    @default("")
+  /// 是否由新加坡 seo-worker 同步 GA4
+  gaSyncEnabled   Boolean   @default(false)
+  gaLastSyncAt    DateTime?
+  gaLastError     String    @default("")
+  gaPeriodDays    Int       @default(28)
+  /// 近 period 天会话数（缓存）
+  gaSessions      Int       @default(0)
+  /// 近 period 天用户数（缓存）
+  gaUsers         Int       @default(0)
+  /// 近 period 天转化次数（关键事件，缓存）
+  gaConversions   Int       @default(0)
+  /// 近 period 天互动率 0～1（缓存）
+  gaEngagementRate Float?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   forms           FormMailConfig[]
@@ -112,12 +127,15 @@ model Site {
   promo           ClientPromo?
   gscKeywords     SiteGscKeyword[]
   gscPages        SiteGscPage[]
+  gaLandingPages  SiteGaLandingPage[]
+  gaChannels      SiteGaChannel[]
 
   @@index([clientId])
   @@index([siteType])
   @@index([tier])
   @@index([domain])
   @@index([gscSyncEnabled])
+  @@index([gaSyncEnabled])
 }
 
 /// GSC 关键词表现缓存（由新加坡 worker 回写）
@@ -153,6 +171,40 @@ model SiteGscPage {
 
   @@unique([siteId, pageUrl])
   @@index([siteId, clicks])
+}
+
+/// GA4 落地页缓存（由新加坡 seo-worker 回写）
+model SiteGaLandingPage {
+  id               String   @id @default(cuid())
+  siteId           String
+  site             Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  pagePath         String
+  sessions         Int      @default(0)
+  engagedSessions  Int      @default(0)
+  conversions      Int      @default(0)
+  engagementRate   Float    @default(0)
+  periodDays       Int      @default(28)
+  syncedAt         DateTime @default(now())
+
+  @@unique([siteId, pagePath])
+  @@index([siteId, sessions])
+}
+
+/// GA4 默认渠道组缓存
+model SiteGaChannel {
+  id               String   @id @default(cuid())
+  siteId           String
+  site             Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  channelGroup     String
+  sessions         Int      @default(0)
+  engagedSessions  Int      @default(0)
+  conversions      Int      @default(0)
+  engagementRate   Float    @default(0)
+  periodDays       Int      @default(28)
+  syncedAt         DateTime @default(now())
+
+  @@unique([siteId, channelGroup])
+  @@index([siteId, sessions])
 }
 
 model FormMailConfig {

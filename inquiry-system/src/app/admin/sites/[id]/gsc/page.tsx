@@ -30,6 +30,12 @@ export default async function SiteGscPage({ params }: Ctx) {
         <Link href="/admin/sites" className="text-[var(--brand)] hover:underline">
           ← 返回网站列表
         </Link>
+        <Link
+          href={`/admin/sites/${site.id}/ga`}
+          className="text-[var(--brand)] hover:underline"
+        >
+          查看 GA4 数据
+        </Link>
         {site.promo ? (
           <Link
             href={`/admin/promos/${site.promo.id}/keywords`}

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CopyField } from "./CopyField";
 import { PluginDownloadCard } from "./PluginDownloadCard";
+import { SideDrawer } from "./SideDrawer";
 
 type FormCfg = {
   id: string;
@@ -76,8 +77,8 @@ export function SiteFormConfigPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-      <div className="w-full max-w-lg bg-white h-full overflow-y-auto shadow-xl p-5 space-y-4">
+    <SideDrawer onClose={onClose}>
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">配置对接清单</h2>
@@ -191,6 +192,16 @@ export function SiteFormConfigPanel({
           </p>
         </Step>
       </div>
-    </div>
+
+      <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3 flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
+        >
+          关闭
+        </button>
+      </div>
+    </SideDrawer>
   );
 }

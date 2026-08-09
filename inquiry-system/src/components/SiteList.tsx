@@ -7,6 +7,18 @@ import { SITE_TIERS, SITE_TYPES, formatDate, formatDateTime, toDateInputValue } 
 import type { SiteListTab, SiteSortField, SortDir } from "@/lib/list-tabs";
 import { compareSemver } from "@/lib/semver";
 import { SiteFormConfigPanel } from "./SiteFormConfigPanel";
+import { SideDrawer } from "./SideDrawer";
+
+/** 与后端 guessGscPropertyUrl 一致，仅用于 UI 提示 */
+function guessScDomain(domain: string) {
+  const d = String(domain || "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/^www\./i, "")
+    .toLowerCase();
+  return d ? `sc-domain:${d}` : "";
+}
 
 export type SiteRow = {
   id: string;
@@ -48,6 +60,15 @@ export type SiteRow = {
   gscKeywordCount: number;
   gscPageCount: number;
   gscAvgPosition: number | null;
+  gaSyncEnabled: boolean;
+  gaPropertyId: string;
+  gaPeriodDays: number;
+  gaLastSyncAt: string | null;
+  gaLastError: string;
+  gaSessions: number;
+  gaUsers: number;
+  gaConversions: number;
+  gaEngagementRate: number | null;
 };
 
 type ClientOpt = {
@@ -90,6 +111,9 @@ const emptyForm = {
   gscSyncEnabled: false,
   gscPropertyUrl: "",
   gscPeriodDays: 28,
+  gaSyncEnabled: false,
+  gaPropertyId: "",
+  gaPeriodDays: 28,
 };
 
 const emptyClientForm = {
@@ -151,6 +175,7 @@ export function SiteList({
   const [editingClient, setEditingClient] = useState<ClientOpt | null>(null);
   const [clientForm, setClientForm] = useState(emptyClientForm);
   const [clientError, setClientError] = useState("");
+  const [gscAdvancedOpen, setGscAdvancedOpen] = useState(false);
 
   const clientGroups = useMemo(() => {
     const map = new Map<string, SiteRow[]>();
@@ -251,6 +276,7 @@ export function SiteList({
   }
 
   function openCreate() {
+    setConfigSite(null);
     setEditing(null);
     // 从某客户页跳转过来时沿用该客户；否则默认「新客户」
     setForm({
@@ -258,13 +284,18 @@ export function SiteList({
       clientId: filters.clientId || NEW_CLIENT,
       newClientName: "",
     });
+    setGscAdvancedOpen(false);
     setCreating(true);
     setError("");
   }
 
   function openEdit(s: SiteRow) {
+    setConfigSite(null);
     setCreating(false);
     setEditing(s);
+    const prop = s.gscPropertyUrl || "";
+    const guessed = guessScDomain(s.domain);
+    setGscAdvancedOpen(Boolean(prop && prop !== guessed));
     setForm({
       clientId: s.clientId,
       newClientName: "",
@@ -278,8 +309,11 @@ export function SiteList({
       wpPassword: s.wpPassword || "",
       enabled: s.enabled,
       gscSyncEnabled: s.gscSyncEnabled,
-      gscPropertyUrl: s.gscPropertyUrl || "",
+      gscPropertyUrl: prop,
       gscPeriodDays: s.gscPeriodDays || 28,
+      gaSyncEnabled: s.gaSyncEnabled,
+      gaPropertyId: s.gaPropertyId || "",
+      gaPeriodDays: s.gaPeriodDays || 28,
     });
     setError("");
   }
@@ -287,6 +321,7 @@ export function SiteList({
   function closeModal() {
     setCreating(false);
     setEditing(null);
+    setGscAdvancedOpen(false);
     setError("");
   }
 
@@ -776,8 +811,11 @@ export function SiteList({
                   表单数{sortMark("formCount")}
                 </Link>
               </th>
-              <th className="px-3 py-2" title="Google Search Console 近 N 天缓存（新加坡 worker 同步）">
+              <th className="px-3 py-2" title="Google Search Console 近 N 天缓存（新加坡 seo-worker 同步）">
                 GSC
+              </th>
+              <th className="px-3 py-2" title="Google Analytics 4 近 N 天缓存（新加坡 seo-worker 同步）">
+                GA
               </th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
@@ -785,7 +823,7 @@ export function SiteList({
           <tbody>
             {clientGroups.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={11} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -926,6 +964,37 @@ export function SiteList({
                         <span className="text-[var(--muted)]">—</span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-xs">
+                      {s.gaSyncEnabled ? (
+                        <Link
+                          href={`/admin/sites/${s.id}/ga`}
+                          className="text-[var(--brand)] hover:underline whitespace-nowrap"
+                          title={
+                            s.gaLastError
+                              ? `同步错误：${s.gaLastError}`
+                              : s.gaLastSyncAt
+                                ? `上次同步 ${formatDateTime(s.gaLastSyncAt)}`
+                                : "已开启，等待新加坡 seo-worker 同步"
+                          }
+                        >
+                          {s.gaLastError ? (
+                            <span className="text-[var(--danger)]">同步失败</span>
+                          ) : s.gaLastSyncAt ? (
+                            <>
+                              {s.gaSessions.toLocaleString()} 会话
+                              <span className="text-[var(--muted)]">
+                                {" "}
+                                · {s.gaConversions} 转化
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[var(--muted)]">待同步</span>
+                          )}
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                       {s.hasWpCredentials ? (
                         <button
@@ -941,7 +1010,10 @@ export function SiteList({
                       <button
                         type="button"
                         className="text-[var(--brand)] font-medium"
-                        onClick={() => setConfigSite(s)}
+                        onClick={() => {
+                          closeModal();
+                          setConfigSite(s);
+                        }}
                       >
                         配置对接
                       </button>
@@ -1023,12 +1095,19 @@ export function SiteList({
       ) : null}
 
       {showModal ? (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <form
-            onSubmit={save}
-            className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-3 shadow-lg"
-          >
-            <h2 className="text-lg font-semibold">{editing ? "编辑网站" : "新增网站"}</h2>
+        <SideDrawer onClose={closeModal}>
+          <form onSubmit={save} className="flex flex-col h-full min-h-0">
+            <div className="shrink-0 px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-[var(--line)]">
+              <h2 className="text-lg font-semibold">{editing ? "编辑网站" : "新增网站"}</h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="text-sm border border-[var(--line)] rounded-lg px-2 py-1 shrink-0"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
             <div className="grid gap-3">
               <div
                 className={
@@ -1179,20 +1258,18 @@ export function SiteList({
                   <span>
                     <span className="font-medium">同步 Google Search Console</span>
                     <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
-                      由新加坡 worker 每日拉取排名/页面展示数据并回写本系统。需先在 GSC
+                      由新加坡 seo-worker 每日拉取排名/页面展示数据并回写本系统。需先在 GSC
                       将该站属性授权给服务账号。
                     </span>
                   </span>
                 </label>
-                <label className="text-sm block">
-                  <span className="text-xs text-[var(--muted)]">GSC 属性 URL</span>
-                  <input
-                    value={form.gscPropertyUrl}
-                    onChange={(e) => setForm({ ...form, gscPropertyUrl: e.target.value })}
-                    placeholder="sc-domain:example.com 或 https://www.example.com/"
-                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
-                  />
-                </label>
+                <p className="text-xs text-[var(--muted)] leading-relaxed">
+                  默认按网站域名使用{" "}
+                  <code className="bg-white/80 px-1 rounded">
+                    {guessScDomain(form.domain) || "sc-domain:域名"}
+                  </code>
+                  。仅当 GSC 为网址前缀属性时需自定义。
+                </p>
                 <label className="text-sm block">
                   <span className="text-xs text-[var(--muted)]">统计天数</span>
                   <input
@@ -1206,12 +1283,82 @@ export function SiteList({
                     className="mt-1 w-28 border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
                   />
                 </label>
+                <div>
+                  <button
+                    type="button"
+                    className="text-xs text-[var(--brand)] hover:underline"
+                    onClick={() => setGscAdvancedOpen((v) => !v)}
+                  >
+                    {gscAdvancedOpen ? "收起高级：自定义 GSC 属性" : "高级：自定义 GSC 属性"}
+                  </button>
+                  {gscAdvancedOpen ? (
+                    <label className="text-sm block mt-2">
+                      <span className="text-xs text-[var(--muted)]">GSC 属性 URL（可选）</span>
+                      <input
+                        value={form.gscPropertyUrl}
+                        onChange={(e) => setForm({ ...form, gscPropertyUrl: e.target.value })}
+                        placeholder="sc-domain:example.com 或 https://www.example.com/"
+                        className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
+                      />
+                      <span className="block text-[11px] text-[var(--muted)] mt-1">
+                        留空则按域名自动使用 sc-domain。填网址前缀时须与 GSC 完全一致（含尾斜杠）。
+                      </span>
+                    </label>
+                  ) : null}
+                </div>
                 {editing ? (
                   <Link
                     href={`/admin/sites/${editing.id}/gsc`}
                     className="text-xs text-[var(--brand)] hover:underline inline-block"
                   >
                     查看已同步的 GSC 数据 →
+                  </Link>
+                ) : null}
+              </div>
+              <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-2">
+                <label className="text-sm flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={form.gaSyncEnabled}
+                    onChange={(e) => setForm({ ...form, gaSyncEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium">同步 Google Analytics 4</span>
+                    <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
+                      由新加坡 seo-worker 与 GSC 同进程拉取会话/落地页/渠道并回写。需在 GA4
+                      媒体资源中把服务账号加为「查看者」。
+                    </span>
+                  </span>
+                </label>
+                <label className="text-sm block">
+                  <span className="text-xs text-[var(--muted)]">GA4 Property ID（纯数字）</span>
+                  <input
+                    value={form.gaPropertyId}
+                    onChange={(e) => setForm({ ...form, gaPropertyId: e.target.value })}
+                    placeholder="例如 123456789（不是 G-XXXX）"
+                    className="mt-1 w-full border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
+                  />
+                </label>
+                <label className="text-sm block">
+                  <span className="text-xs text-[var(--muted)]">统计天数</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={form.gaPeriodDays}
+                    onChange={(e) =>
+                      setForm({ ...form, gaPeriodDays: Number(e.target.value) || 28 })
+                    }
+                    className="mt-1 w-28 border border-[var(--line)] rounded-lg px-2 py-1.5 bg-white"
+                  />
+                </label>
+                {editing ? (
+                  <Link
+                    href={`/admin/sites/${editing.id}/ga`}
+                    className="text-xs text-[var(--brand)] hover:underline inline-block"
+                  >
+                    查看已同步的 GA 数据 →
                   </Link>
                 ) : null}
               </div>
@@ -1236,7 +1383,8 @@ export function SiteList({
               </div>
             </div>
             {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
-            <div className="flex justify-end gap-2">
+            </div>
+            <div className="shrink-0 border-t border-[var(--line)] px-5 py-3 flex justify-end gap-2 bg-white">
               <button
                 type="button"
                 onClick={closeModal}
@@ -1252,7 +1400,7 @@ export function SiteList({
               </button>
             </div>
           </form>
-        </div>
+        </SideDrawer>
       ) : null}
 
       {editingClient ? (

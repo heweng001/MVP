@@ -140,6 +140,15 @@ export default async function SitesPage({
     gscKeywordCount: s.gscKeywordCount,
     gscPageCount: s.gscPageCount,
     gscAvgPosition: s.gscAvgPosition,
+    gaSyncEnabled: s.gaSyncEnabled,
+    gaPropertyId: s.gaPropertyId,
+    gaPeriodDays: s.gaPeriodDays,
+    gaLastSyncAt: s.gaLastSyncAt?.toISOString() ?? null,
+    gaLastError: s.gaLastError,
+    gaSessions: s.gaSessions,
+    gaUsers: s.gaUsers,
+    gaConversions: s.gaConversions,
+    gaEngagementRate: s.gaEngagementRate,
     listTab: siteListTabFrom(s),
   }));
 
