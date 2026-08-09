@@ -59,29 +59,61 @@ export function SiteFormConfigPanel({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [err, setErr] = useState("");
 
-  async function saveForm(e: FormEvent<HTMLFormElement>) {
+  async function saveAll(e: FormEvent) {
     e.preventDefault();
-    const form = e.currentTarget;
-    setBusy(true);
-    setErr("");
-    const fd = new FormData(form);
-    const res = await fetch("/api/admin/forms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        siteId,
-        formId: fd.get("formId"),
-        toEmails: fd.get("toEmails"),
-        ccEmails: fd.get("ccEmails"),
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setErr(data.error || "保存失败");
+    const form = document.getElementById("site-form-mail-config") as HTMLFormElement | null;
+    const fd = form ? new FormData(form) : new FormData();
+    const formId = String(fd.get("formId") || "").trim();
+    const toEmails = String(fd.get("toEmails") || "").trim();
+    const ccEmails = String(fd.get("ccEmails") || "").trim();
+    const addingForm = Boolean(formId || toEmails || ccEmails);
+
+    if (addingForm && !formId) {
+      setErr("请填写 WPForms form_id");
       return;
     }
-    form.reset();
+    if (addingForm && !toEmails) {
+      setErr("请填写收件人邮箱");
+      return;
+    }
+    if (!addingForm && enabled === initialEnabled) {
+      setErr("没有需要保存的更改");
+      return;
+    }
+
+    setBusy(true);
+    setErr("");
+
+    if (enabled !== initialEnabled) {
+      const enRes = await fetch(`/api/admin/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!enRes.ok) {
+        const data = await enRes.json().catch(() => ({}));
+        setBusy(false);
+        setErr(data.error || "保存对接状态失败");
+        return;
+      }
+    }
+
+    if (addingForm) {
+      const res = await fetch("/api/admin/forms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, formId, toEmails, ccEmails }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setBusy(false);
+        setErr(data.error || "保存表单收件失败");
+        return;
+      }
+      form?.reset();
+    }
+
+    setBusy(false);
     router.refresh();
   }
 
@@ -100,24 +132,6 @@ export function SiteFormConfigPanel({
       setErr(data.error || "删除失败");
       return;
     }
-    router.refresh();
-  }
-
-  async function toggleEnabled(next: boolean) {
-    setBusy(true);
-    setErr("");
-    const res = await fetch(`/api/admin/sites/${siteId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: next }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setErr(data.error || "更新对接状态失败");
-      return;
-    }
-    setEnabled(next);
     router.refresh();
   }
 
@@ -150,14 +164,14 @@ export function SiteFormConfigPanel({
               className="mt-1"
               checked={enabled}
               disabled={busy}
-              onChange={(e) => toggleEnabled(e.target.checked)}
+              onChange={(e) => setEnabled(e.target.checked)}
             />
             <span>
               <span className="font-medium">启用询盘对接</span>
               <span className="block text-xs text-[var(--muted)] mt-1 leading-relaxed">
-                勾选后：该站 WordPress 插件可用 site_key 把表单询盘推到本系统。
+                勾选并保存后：该站 WordPress 插件可用 site_key 把表单询盘推到本系统。
                 <br />
-                取消勾选后：本系统<strong>立即拒收</strong>该站推送；询盘走 WPForms
+                取消勾选并保存后：本系统<strong>拒收</strong>该站推送；询盘走 WPForms
                 原生邮件，且不会进本系统列表/报表。
               </span>
             </span>
@@ -232,16 +246,14 @@ export function SiteFormConfigPanel({
               ))
             )}
           </ul>
-          <form id="site-form-mail-config" onSubmit={saveForm} className="grid gap-2">
+          <form id="site-form-mail-config" onSubmit={saveAll} className="grid gap-2">
             <input
               name="formId"
-              required
               placeholder="WPForms form_id，如 34"
               className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
             />
             <input
               name="toEmails"
-              required
               placeholder="收件人邮箱，逗号分隔"
               className="border border-[var(--line)] rounded-lg px-2 py-1.5 text-sm"
             />
@@ -279,7 +291,8 @@ export function SiteFormConfigPanel({
           <button
             type="button"
             onClick={onClose}
-            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
+            disabled={busy}
+            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
           >
             取消
           </button>
