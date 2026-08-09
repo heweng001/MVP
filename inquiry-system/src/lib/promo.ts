@@ -87,39 +87,6 @@ export function dedupeKeywords(raw: string): {
   };
 }
 
-/** 纯文本历史 → 简单 HTML，便于富文本编辑器加载 */
-export function ensureRichHtml(raw: string): string {
-  const s = String(raw || "");
-  if (!s.trim()) return "";
-  if (/<[a-z][\s\S]*>/i.test(s)) return s;
-  return s
-    .split(/\n{2,}/)
-    .map((block) => {
-      const escaped = block
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br>");
-      return `<p>${escaped}</p>`;
-    })
-    .join("");
-}
-
-/**
- * 保存前清洗 HTML（无 jsdom，兼容服务器 Node 20）。
- * 去掉脚本/事件与危险协议，保留表格与 http(s) 图片。
- */
-export function sanitizePromoHtml(raw: string): string {
-  let s = String(raw || "");
-  if (!s) return "";
-  s = s.replace(/<\/?(script|style|iframe|object|embed|link|meta|form|input|button|textarea|select)[^>]*>/gi, "");
-  s = s.replace(/<!--[\s\S]*?-->/g, "");
-  s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-  s = s.replace(/\s(href|src)\s*=\s*(['"]?)\s*javascript:[^'"\s>]*/gi, " $1=$2#");
-  s = s.replace(/\s(href|src)\s*=\s*(['"]?)\s*data:[^'"\s>]*/gi, " $1=$2#");
-  return s;
-}
-
 export async function getPromoByEditToken(token: string) {
   if (!token?.trim()) return null;
   return prisma.clientPromo.findUnique({

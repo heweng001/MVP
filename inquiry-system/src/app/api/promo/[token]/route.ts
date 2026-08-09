@@ -6,7 +6,6 @@ import {
   isEditTokenValid,
   promoDisplayLabel,
   recordPromoHistory,
-  sanitizePromoHtml,
 } from "@/lib/promo";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -75,12 +74,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       keywords,
       productPoints:
         body.productPoints !== undefined
-          ? sanitizePromoHtml(String(body.productPoints))
+          ? String(body.productPoints)
           : promo.productPoints,
       adPoints:
-        body.adPoints !== undefined
-          ? sanitizePromoHtml(String(body.adPoints))
-          : promo.adPoints,
+        body.adPoints !== undefined ? String(body.adPoints) : promo.adPoints,
     },
   });
   await recordPromoHistory(promo.id, submitterName);

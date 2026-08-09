@@ -8,7 +8,6 @@ import {
   promoDisplayLabel,
   promoEditUrl,
   recordPromoHistory,
-  sanitizePromoHtml,
 } from "@/lib/promo";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -57,10 +56,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     keywordDedupe = dedupeKeywords(String(body.keywords));
     data.keywords = keywordDedupe.text;
   }
-  if (body.productPoints !== undefined) {
-    data.productPoints = sanitizePromoHtml(String(body.productPoints));
-  }
-  if (body.adPoints !== undefined) data.adPoints = sanitizePromoHtml(String(body.adPoints));
+  if (body.productPoints !== undefined) data.productPoints = String(body.productPoints);
+  if (body.adPoints !== undefined) data.adPoints = String(body.adPoints);
   if (body.keywordsNote !== undefined) data.keywordsNote = String(body.keywordsNote);
   if (body.productPointsNote !== undefined) {
     data.productPointsNote = String(body.productPointsNote);

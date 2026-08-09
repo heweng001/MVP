@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PROMO_TABS, countKeywordLines, type PromoTabKey } from "@/lib/promo";
-import { PromoRichEditor } from "@/components/promo/PromoRichEditor";
 
 export function PromoPublicEditor({
   token,
@@ -105,20 +104,21 @@ export function PromoPublicEditor({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl p-4 space-y-3">
-        <div className="space-y-1">
+        <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--muted)]">
             {PROMO_TABS.find((t) => t.key === tab)?.label}
           </span>
-          {tab === "productPoints" ? (
-            <PromoRichEditor
-              key="productPoints"
-              value={productPoints}
-              onChange={setProductPoints}
-            />
-          ) : (
-            <PromoRichEditor key="adPoints" value={adPoints} onChange={setAdPoints} />
-          )}
-        </div>
+          <textarea
+            value={tab === "productPoints" ? productPoints : adPoints}
+            onChange={(e) =>
+              tab === "productPoints"
+                ? setProductPoints(e.target.value)
+                : setAdPoints(e.target.value)
+            }
+            className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm min-h-[180px]"
+            placeholder="请填写本页内容"
+          />
+        </label>
         <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--muted)]">您的姓名（提交必填）</span>
           <input

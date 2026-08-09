@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PROMO_TABS, countKeywordLines, type PromoNoteKey, type PromoTabKey } from "@/lib/promo";
 import { formatDateTime } from "@/lib/labels";
-import { PromoRichEditor } from "@/components/promo/PromoRichEditor";
 
 type HistoryRow = { id: string; submittedBy: string; createdAt: string };
 
@@ -178,18 +177,19 @@ export function PromoEditor({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl p-4 -mt-px space-y-3">
-        <div className="space-y-1">
+        <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--muted)]">{currentTab.label}（客户可见）</span>
-          {tab === "productPoints" ? (
-            <PromoRichEditor
-              key="productPoints"
-              value={productPoints}
-              onChange={setProductPoints}
-            />
-          ) : (
-            <PromoRichEditor key="adPoints" value={adPoints} onChange={setAdPoints} />
-          )}
-        </div>
+          <textarea
+            value={tab === "productPoints" ? productPoints : adPoints}
+            onChange={(e) =>
+              tab === "productPoints"
+                ? setProductPoints(e.target.value)
+                : setAdPoints(e.target.value)
+            }
+            className="w-full border border-[var(--line)] rounded-lg px-3 py-2 text-sm min-h-[180px]"
+            placeholder="客户可看到并编辑的内容…"
+          />
+        </label>
         <label className="block text-sm space-y-1">
           <span className="text-xs text-[var(--warn)]">内部备注（仅后台可见，客户链接看不到）</span>
           <textarea

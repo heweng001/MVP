@@ -57,7 +57,7 @@ export default async function PromoDetailPage({ params }: Ctx) {
         <div className="mt-2 -mb-2">
           <PageHeader
             title="信息核对详情"
-            hint="可关联一个网站；产品/广告要点支持图文与表格。客户编辑链接请在列表页生成/复制。"
+            hint="可关联一个网站；产品/广告要点为纯文本。客户编辑链接请在列表页生成/复制。"
           />
         </div>
       </div>

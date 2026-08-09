@@ -40,11 +40,11 @@ model ClientPromo {
   keywords         String    @default("")
   /// 关键词内部备注（仅后台）
   keywordsNote     String    @default("")
-  /// 公司产品要点（客户可见，HTML 图文）
+  /// 公司产品要点（客户可见，纯文本）
   productPoints    String    @default("")
   /// 产品要点内部备注（仅后台）
   productPointsNote String   @default("")
-  /// 广告要点（客户可见，HTML 图文）
+  /// 广告要点（客户可见，纯文本）
   adPoints         String    @default("")
   /// 广告要点内部备注（仅后台）
   adPointsNote     String    @default("")
