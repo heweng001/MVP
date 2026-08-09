@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SITE_TIERS, SITE_TYPES, parseDateInput } from "@/lib/labels";
 import { syncClientServiceDates } from "@/lib/client-service-dates";
-import { encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
+import { decryptSecret, encryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,7 +19,7 @@ function publicSite(site: {
   };
 }
 
-export async function GET(_req: NextRequest, ctx: Ctx) {
+export async function GET(req: NextRequest, ctx: Ctx) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
@@ -29,8 +29,12 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   });
   if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const includeSecrets = req.nextUrl.searchParams.get("secrets") === "1";
   return NextResponse.json({
-    site: publicSite(site),
+    site: {
+      ...publicSite(site),
+      ...(includeSecrets ? { wpPassword: decryptSecret(site.wpPasswordEnc) } : {}),
+    },
   });
 }
 

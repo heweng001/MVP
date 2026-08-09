@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SiteList } from "@/components/SiteList";
 import { PageHeader } from "@/components/PageHeader";
 import { appUrl } from "@/lib/constants";
-import { decryptSecret, hasWpRemoteCreds } from "@/lib/site-credentials";
+import { hasWpRemoteCreds } from "@/lib/site-credentials";
 import { readPluginVersion } from "@/lib/plugin-meta";
 import {
   SITE_LIST_TABS,
@@ -73,31 +73,35 @@ export default async function SitesPage({
   const tab = parseSiteListTab(sp.tab);
   const { sort, order } = parseSiteSort(sp.sort, sp.order);
 
-  const clients = await prisma.client.findMany({ orderBy: { name: "asc" } });
-  const sites = await prisma.site.findMany({
-    where: {
-      ...(clientId ? { clientId } : {}),
-      ...(enabled === "1" ? { enabled: true } : enabled === "0" ? { enabled: false } : {}),
-      ...(q
-        ? {
-            OR: [{ domain: { contains: q } }, { client: { name: { contains: q } } }],
-          }
-        : {}),
-    },
-    include: {
-      client: true,
-      forms: true,
-      promo: {
-        select: {
-          id: true,
-          lastSubmittedBy: true,
-          lastSubmittedAt: true,
-        },
+  const [clients, sites, latestPluginVersion] = await Promise.all([
+    prisma.client.findMany({ orderBy: { name: "asc" } }),
+    prisma.site.findMany({
+      where: {
+        ...(clientId ? { clientId } : {}),
+        ...(enabled === "1" ? { enabled: true } : enabled === "0" ? { enabled: false } : {}),
+        ...(q
+          ? {
+              OR: [{ domain: { contains: q } }, { client: { name: { contains: q } } }],
+            }
+          : {}),
       },
-      _count: { select: { forms: true } },
-    },
-  });
+      include: {
+        client: true,
+        forms: true,
+        promo: {
+          select: {
+            id: true,
+            lastSubmittedBy: true,
+            lastSubmittedAt: true,
+          },
+        },
+        _count: { select: { forms: true } },
+      },
+    }),
+    readPluginVersion().catch(() => ""),
+  ]);
 
+  // 列表不解密 WP 密码（scrypt 派生密钥昂贵）；编辑时再按站拉取
   const mapped = sites.map((s) => ({
     id: s.id,
     domain: s.domain,
@@ -110,7 +114,7 @@ export default async function SitesPage({
     spamExtraWords: s.spamExtraWords,
     wpAdminUrl: s.wpAdminUrl,
     wpUsername: s.wpUsername,
-    wpPassword: s.wpPasswordEnc ? decryptSecret(s.wpPasswordEnc) : "",
+    wpPassword: "",
     hasWpCredentials: hasWpRemoteCreds(s),
     hasWpPassword: Boolean(s.wpPasswordEnc),
     enabled: s.enabled,
@@ -161,13 +165,6 @@ export default async function SitesPage({
     sort,
     order,
   );
-
-  let latestPluginVersion = "";
-  try {
-    latestPluginVersion = await readPluginVersion();
-  } catch {
-    latestPluginVersion = "";
-  }
 
   return (
     <div>

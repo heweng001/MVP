@@ -123,14 +123,25 @@ export function SiteFormConfigPanel({
 
   return (
     <SideDrawer onClose={onClose}>
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">询盘配置</h2>
-          <p className="text-sm text-[var(--muted)] mt-0.5">{domain}</p>
-          <p className="text-xs text-[var(--muted)] mt-1">
-            请按下方步骤完成。插件装在客户 WordPress 站，不在本系统服务器。
-          </p>
+      <div className="flex flex-col h-full min-h-0">
+        <div className="shrink-0 px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-[var(--line)]">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">询盘配置</h2>
+            <p className="text-sm text-[var(--muted)] mt-0.5 truncate">{domain}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm border border-[var(--line)] rounded-lg px-2 py-1 shrink-0"
+          >
+            关闭
+          </button>
         </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <p className="text-xs text-[var(--muted)]">
+          请按下方步骤完成。插件装在客户 WordPress 站，不在本系统服务器。
+        </p>
 
         <div className="rounded-xl border border-[var(--line)] bg-black/[0.02] p-3">
           <label className="text-sm flex items-start gap-2">
@@ -251,31 +262,28 @@ export function SiteFormConfigPanel({
           <p className="text-xs text-[var(--muted)] leading-relaxed">
             邮件规则：第一封为标记邮件（不含买家邮箱）；客户标「有效」后，服务期内系统会立刻再发一封含买家邮箱的邮件供回复。
           </p>
-          <p className="text-xs text-[var(--muted)] leading-relaxed">
-            配置完成后，在站点前台提交一封测试询盘：本系统「询盘列表」应出现记录，步骤 3
-            配置的收件邮箱应收到带「有效/无效」按钮的邮件（需已在「发件设置」配好 SMTP）。
-          </p>
         </div>
 
         {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
-      </div>
+        </div>
 
-      <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3 flex justify-end gap-2">
-        <button
-          type="submit"
-          form="site-form-mail-config"
-          disabled={busy}
-          className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-        >
-          {busy ? "保存中…" : "保存/更新表单收件"}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
-        >
-          关闭
-        </button>
+        <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3 flex justify-start gap-2">
+          <button
+            type="submit"
+            form="site-form-mail-config"
+            disabled={busy}
+            className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            {busy ? "保存中…" : "保存"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
+          >
+            取消
+          </button>
+        </div>
       </div>
     </SideDrawer>
   );

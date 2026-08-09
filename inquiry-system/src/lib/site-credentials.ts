@@ -1,8 +1,13 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 
+let cachedCredKey: Buffer | null = null;
+
+/** scrypt 较慢，进程内缓存派生密钥，避免列表/批量加解密反复计算 */
 function credKey() {
+  if (cachedCredKey) return cachedCredKey;
   const secret = process.env.AUTH_SECRET || "dev-insecure-auth-secret";
-  return scryptSync(secret, "inquiry-wp-cred-v1", 32);
+  cachedCredKey = scryptSync(secret, "inquiry-wp-cred-v1", 32);
+  return cachedCredKey;
 }
 
 /** AES-256-GCM；空串原样返回 */

@@ -289,9 +289,30 @@ export function SiteList({
     setError("");
   }
 
-  function openEdit(s: SiteRow) {
+  async function openEdit(s: SiteRow) {
     setConfigSite(null);
     setCreating(false);
+    setError("");
+    setBusy(true);
+    let wpPassword = "";
+    try {
+      const res = await fetch(`/api/admin/sites/${s.id}?secrets=1`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        wpPassword = String(data.site?.wpPassword || "");
+      } else if (s.hasWpPassword) {
+        setBusy(false);
+        setError(data.error || "读取网站密码失败，请重试");
+        return;
+      }
+    } catch {
+      setBusy(false);
+      if (s.hasWpPassword) {
+        setError("读取网站密码失败，请重试");
+        return;
+      }
+    }
+    setBusy(false);
     setEditing(s);
     const prop = s.gscPropertyUrl || "";
     const guessed = guessScDomain(s.domain);
@@ -306,7 +327,7 @@ export function SiteList({
       endDate: toDateInputValue(s.endDate),
       wpAdminUrl: s.wpAdminUrl || "",
       wpUsername: s.wpUsername || "",
-      wpPassword: s.wpPassword || "",
+      wpPassword,
       enabled: s.enabled,
       gscSyncEnabled: s.gscSyncEnabled,
       gscPropertyUrl: prop,
@@ -315,7 +336,6 @@ export function SiteList({
       gaPropertyId: s.gaPropertyId || "",
       gaPeriodDays: s.gaPeriodDays || 28,
     });
-    setError("");
   }
 
   function closeModal() {
@@ -682,6 +702,11 @@ export function SiteList({
 
   return (
     <div className="space-y-4">
+      {error && !showModal ? (
+        <p className="text-sm text-[var(--danger)] bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      ) : null}
       <form className="flex flex-wrap gap-2 bg-white border border-[var(--line)] rounded-xl p-3 shadow-sm">
         <input type="hidden" name="tab" value={tab} />
         {filters.sort ? (
@@ -1365,19 +1390,19 @@ export function SiteList({
             </div>
             {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
             </div>
-            <div className="shrink-0 border-t border-[var(--line)] px-5 py-3 flex justify-end gap-2 bg-white">
+            <div className="shrink-0 border-t border-[var(--line)] px-5 py-3 flex justify-start gap-2 bg-white">
+              <button
+                disabled={busy}
+                className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                保存
+              </button>
               <button
                 type="button"
                 onClick={closeModal}
                 className="border border-[var(--line)] rounded-lg px-3 py-1.5 text-sm"
               >
                 取消
-              </button>
-              <button
-                disabled={busy}
-                className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-              >
-                保存
               </button>
             </div>
           </form>
