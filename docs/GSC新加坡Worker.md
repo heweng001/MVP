@@ -30,6 +30,8 @@ GSC_WORKER_SECRET="一串足够长的随机串"
 
 公网 IP 仅用于 SSH 运维；**不必**对公网开放业务端口。Worker 主动出站访问 Google 与阿里云即可。
 
+同机还可部署 [`tiktok-worker`](./TikTok新加坡Worker.md) 供 erp.maoniux.com 抓取 TikTok（需对阿里云 ECS 放行 8788）。
+
 ## 指标说明
 
 | 字段 | 来源 |

@@ -1,0 +1,13 @@
+{
+  "name": "tiktok-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "fetch": "node cli-fetch.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
