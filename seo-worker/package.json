@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "sync": "node sync.mjs",
-    "sync:once": "node sync.mjs"
+    "sync:once": "node sync.mjs",
+    "sync:month": "node sync.mjs --report-month"
   },
   "dependencies": {
     "googleapis": "^148.0.0"

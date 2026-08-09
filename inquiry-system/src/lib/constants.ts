@@ -37,23 +37,19 @@ export const STATUS_LABELS: Record<string, string> = {
 /** 询盘状态 / 列表页签悬停说明 */
 export const STATUS_HINTS: Record<string, string> = {
   all: "显示当前筛选条件下的所有询盘。",
-  review: "垃圾分达到人工审核阈值且未达自动拦截阈值，可审核通过（发给客户）或标为垃圾（不发给客户）；超过 6 小时未处理将自动发给客户。",
+  review: "垃圾分达到人工审核阈值且未达自动拦截阈值，可审核通过（发给客户）或标为垃圾（不发给客户）；每天中午 12:00 仍待审核的将自动发给客户。",
   spam: "未发给客户的垃圾询盘：含系统自动判定的「自动垃圾」，以及管理员标为垃圾的「审核垃圾」。",
   auto_spam: "系统按垃圾分自动判定为明显垃圾，未发给客户；可补发。",
   review_spam: "管理员在待审核中标为垃圾，或对未转发询盘手动标为垃圾。",
   forwarded: "已成功发给客户的询盘（含待标记、有效、无效）。",
   pending: "已转发且等待客户点有效/无效。发信超过 72 小时后不可再标无效，仍可标有效。",
-  timeout_unmarked: "历史状态：发信已满 72 小时仍未标记（已并入待标记统计，不再单独展示）。",
+  timeout_unmarked: "已废弃的历史状态，系统会归一为待标记。",
   valid: "客户（或管理员）已标记为有效询盘；客户端不可再改为无效。",
   invalid: "客户（或管理员）已标记为无效；客户可将无效改为有效。",
 };
 
 export function spamThreshold() {
   return Number(process.env.SPAM_THRESHOLD || 80);
-}
-
-export function reviewHours() {
-  return Number(process.env.REVIEW_HOURS || 6);
 }
 
 export function markHours() {

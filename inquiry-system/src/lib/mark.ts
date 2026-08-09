@@ -73,9 +73,7 @@ export function getMarkCapabilities(inquiry: {
   const gate = mailContentGate(inquiry.site);
   const isValid = inquiry.status === InquiryStatus.VALID;
   const isInvalid = inquiry.status === InquiryStatus.INVALID;
-  const unmarked =
-    inquiry.status === InquiryStatus.PENDING ||
-    inquiry.status === InquiryStatus.TIMEOUT_UNMARKED;
+  const unmarked = inquiry.status === InquiryStatus.PENDING;
   const invalidExpired = isInvalidMarkExpired(inquiry.sentAt);
 
   let followupTip = "";
@@ -166,7 +164,6 @@ export async function applyMark(token: string, action: MarkAction, reason?: stri
   }
   if (
     inquiry.status !== InquiryStatus.PENDING &&
-    inquiry.status !== InquiryStatus.TIMEOUT_UNMARKED &&
     inquiry.status !== InquiryStatus.INVALID
   ) {
     return { ok: false as const, error: "当前状态不可标记为无效。" };

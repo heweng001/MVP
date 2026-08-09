@@ -7,9 +7,11 @@
 ```
 新加坡 cron → npm run sync
   → GET  /api/seo-worker/sites
-  → GSC Search Analytics → POST /api/gsc-worker/ingest
-  → GA4 Data API         → POST /api/ga-worker/ingest
+  → GSC/GA 滚动近 N 天 → /api/gsc-worker/ingest + /api/ga-worker/ingest
+  → GSC/GA 自然月（当月 MTD；月初再补上月）→ /api/seo-worker/month-ingest
 ```
+
+补历史月：`npm run sync:month -- 2026-07`
 
 ## 前置
 

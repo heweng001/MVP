@@ -9,6 +9,7 @@ const links = [
   { href: "/admin/clients", label: "客户列表" },
   { href: "/admin/sites", label: "网站列表" },
   { href: "/admin/promos", label: "信息核对" },
+  { href: "/admin/report-template", label: "报表模版" },
   { href: "/admin/blacklist", label: "黑名单" },
   { href: "/admin/settings", label: "发件设置" },
 ];

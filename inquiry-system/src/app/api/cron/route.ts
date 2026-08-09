@@ -1,17 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processMarkTimeouts, processReviewTimeouts } from "@/lib/pipeline";
+import { processReviewDailyFlush } from "@/lib/pipeline";
+import { autoSnapshotPreviousMonth } from "@/lib/site-report";
 
 export const runtime = "nodejs";
 
+/**
+ * 阿里云 cron 入口（按 task 拆分，避免混在高频任务里）：
+ * - task=review（默认）：每日中午批量转发全部待审核
+ * - task=monthly-report：每月 1 号自动生成上月月报（无则创建）
+ */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-cron-secret") || req.nextUrl.searchParams.get("secret");
   if (!secret || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const review = await processReviewTimeouts();
-  const mark = await processMarkTimeouts();
-  return NextResponse.json({ ok: true, review, mark });
+  const task = (req.nextUrl.searchParams.get("task") || "review").trim();
+
+  if (task === "review") {
+    const review = await processReviewDailyFlush();
+    return NextResponse.json({ ok: true, task, review });
+  }
+
+  if (task === "monthly-report") {
+    const monthlyReport = await autoSnapshotPreviousMonth();
+    return NextResponse.json({ ok: true, task, monthlyReport });
+  }
+
+  return NextResponse.json(
+    { ok: false, error: "Unknown task. Use task=review|monthly-report" },
+    { status: 400 },
+  );
 }
 
 export async function GET(req: NextRequest) {

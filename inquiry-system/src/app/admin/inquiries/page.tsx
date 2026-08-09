@@ -16,7 +16,7 @@ const TABS = [
     key: "review",
     label: "待审核",
     status: InquiryStatus.REVIEW,
-    hint: "垃圾分达到人工审核阈值且未达自动拦截阈值。可「审核通过」（发给客户）或「标为垃圾」（状态变为审核垃圾、不发给客户）；支持批量。超过 6 小时未处理将自动发给客户。阈值可在「发件设置」中配置。",
+    hint: "垃圾分达到人工审核阈值且未达自动拦截阈值。可「审核通过」（发给客户）或「标为垃圾」（状态变为审核垃圾、不发给客户）；支持批量。每天中午 12:00 仍待审核的将自动发给客户。阈值可在「发件设置」中配置。",
   },
   {
     key: "spam",
@@ -53,6 +53,7 @@ const TABS = [
 function tabFromParam(tab: string | undefined, status: string | undefined) {
   // 兼容旧「未标记 / 超时未标记」页签
   if (tab === "unmarked" || tab === "timeout_unmarked") return "pending";
+  // 废弃状态，展示并入待标记
   if (status === InquiryStatus.TIMEOUT_UNMARKED) return "pending";
   if (tab === "auto_spam" || tab === "review_spam") return "spam";
   if (tab && TABS.some((t) => t.key === tab)) return tab;

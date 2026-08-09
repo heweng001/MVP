@@ -40,6 +40,12 @@ export default async function SiteGaPage({ params }: Ctx) {
         >
           查看 GSC 数据
         </Link>
+        <Link
+          href={`/admin/sites/${site.id}/report`}
+          className="text-[var(--brand)] hover:underline"
+        >
+          月度报表
+        </Link>
       </div>
 
       <div className="bg-[var(--panel)] border border-[var(--line)] rounded-lg p-4 text-sm grid sm:grid-cols-2 gap-3">
@@ -57,15 +63,18 @@ export default async function SiteGaPage({ params }: Ctx) {
           <div className="break-all">{site.gaPropertyId || "—"}</div>
         </div>
         <div>
-          <div className="text-[var(--muted)]">会话 / 用户 / 转化</div>
+          <div className="text-[var(--muted)]">浏览量 / 会话 / 用户</div>
           <div>
-            {site.gaSessions.toLocaleString()} · {site.gaUsers.toLocaleString()} ·{" "}
-            {site.gaConversions.toLocaleString()}
+            {site.gaPageViews.toLocaleString()} · {site.gaSessions.toLocaleString()} ·{" "}
+            {site.gaUsers.toLocaleString()}
           </div>
         </div>
         <div>
-          <div className="text-[var(--muted)]">互动率</div>
-          <div>{pct(site.gaEngagementRate)}</div>
+          <div className="text-[var(--muted)]">互动会话 / 互动率 / 转化</div>
+          <div>
+            {site.gaEngagedSessions.toLocaleString()} · {pct(site.gaEngagementRate)} ·{" "}
+            {site.gaConversions.toLocaleString()}
+          </div>
         </div>
         <div className="sm:col-span-2">
           <div className="text-[var(--muted)]">说明</div>

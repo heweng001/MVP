@@ -380,32 +380,36 @@ export async function ingestInquiry(body: IngestBody) {
   return { inquiry: fresh, duplicated: false };
 }
 
-export async function processReviewTimeouts() {
-  const hours = Number(process.env.REVIEW_HOURS || 6);
-  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+/**
+ * 每日中午批量：把当前全部「待审核」发给客户。
+ * 顺带把历史 timeout_unmarked 归一为 pending（一次性数据清理）。
+ */
+export async function processReviewDailyFlush() {
+  const legacy = await prisma.inquiry.updateMany({
+    where: { status: InquiryStatus.TIMEOUT_UNMARKED },
+    data: { status: InquiryStatus.PENDING },
+  });
+
   const due = await prisma.inquiry.findMany({
-    where: {
-      status: InquiryStatus.REVIEW,
-      reviewEnteredAt: { lte: cutoff },
-    },
+    where: { status: InquiryStatus.REVIEW },
+    orderBy: { reviewEnteredAt: "asc" },
   });
   let sent = 0;
+  const errors: string[] = [];
   for (const item of due) {
     try {
       await sendInquiryById(item.id, { autoSentReview: true });
       sent++;
     } catch (e) {
-      console.error("[cron] review timeout send failed", item.id, e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[cron] review daily flush send failed", item.id, e);
+      errors.push(`${item.id}: ${msg}`);
     }
   }
-  return { processed: due.length, sent };
-}
-
-/** 不再产生「超时未标记」状态；将历史超时未标记回退为待标记 */
-export async function processMarkTimeouts() {
-  const result = await prisma.inquiry.updateMany({
-    where: { status: InquiryStatus.TIMEOUT_UNMARKED },
-    data: { status: InquiryStatus.PENDING },
-  });
-  return { reverted: result.count };
+  return {
+    legacyTimeoutUnmarkedFixed: legacy.count,
+    processed: due.length,
+    sent,
+    errors,
+  };
 }

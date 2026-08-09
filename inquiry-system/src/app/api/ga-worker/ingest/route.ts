@@ -94,6 +94,19 @@ export async function POST(req: NextRequest) {
     0,
     Math.round(Number((summary as { users?: number }).users) || 0),
   );
+  const pageViews = Math.max(
+    0,
+    Math.round(
+      Number(
+        (summary as { pageViews?: number; screenPageViews?: number }).pageViews ??
+          (summary as { screenPageViews?: number }).screenPageViews,
+      ) || 0,
+    ),
+  );
+  const engagedSessions = Math.max(
+    0,
+    Math.round(Number((summary as { engagedSessions?: number }).engagedSessions) || 0),
+  );
   const conversions = Math.max(
     0,
     Math.round(Number((summary as { conversions?: number }).conversions) || 0),
@@ -143,6 +156,8 @@ export async function POST(req: NextRequest) {
         gaPeriodDays: periodDays,
         gaSessions: sessions,
         gaUsers: users,
+        gaPageViews: pageViews,
+        gaEngagedSessions: engagedSessions,
         gaConversions: conversions,
         gaEngagementRate: engagementRate,
         gaPropertyId:

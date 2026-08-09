@@ -11,10 +11,10 @@ async function queryAnalytics(searchconsole, siteUrl, opts) {
 /**
  * @param {object} site - seo-worker sites 项（含 gsc 子对象或扁平字段）
  */
-export async function syncGscSite(searchconsole, site, defaults) {
+export async function syncGscSite(searchconsole, site, defaults, rangeOverride = null) {
   const gsc = site.gsc || {};
   const periodDays = gsc.periodDays || site.periodDays || defaults.gscPeriodDays;
-  const { startDate, endDate } = gscDateRange(periodDays);
+  const { startDate, endDate } = rangeOverride || gscDateRange(periodDays);
   const propertyUrl = gsc.propertyUrl || site.propertyUrl;
   if (!propertyUrl) {
     throw new Error("缺少 GSC propertyUrl");
@@ -113,6 +113,8 @@ export async function syncGscSite(searchconsole, site, defaults) {
     siteId: site.id,
     propertyUrl,
     periodDays,
+    startDate,
+    endDate,
     syncedAt: new Date().toISOString(),
     summary: {
       avgPosition,

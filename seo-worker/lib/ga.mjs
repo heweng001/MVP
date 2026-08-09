@@ -1,5 +1,7 @@
 import { gaDateRange } from "./common.mjs";
 
+// rangeOverride: { startDate, endDate }
+
 function metricMap(row, metricHeaders) {
   const out = {};
   const values = row.metricValues || [];
@@ -22,7 +24,7 @@ async function runReport(analyticsdata, propertyId, requestBody) {
 /**
  * @param {object} site - seo-worker sites 项（含 ga 子对象）
  */
-export async function syncGaSite(analyticsdata, site, defaults) {
+export async function syncGaSite(analyticsdata, site, defaults, rangeOverride = null) {
   const ga = site.ga || {};
   const propertyId = String(ga.propertyId || "").trim();
   if (!propertyId) {
@@ -33,11 +35,12 @@ export async function syncGaSite(analyticsdata, site, defaults) {
   }
 
   const periodDays = ga.periodDays || defaults.gaPeriodDays;
-  const { startDate, endDate } = gaDateRange(periodDays);
+  const { startDate, endDate } = rangeOverride || gaDateRange(periodDays);
 
   const summaryMetrics = [
     { name: "sessions" },
     { name: "totalUsers" },
+    { name: "screenPageViews" },
     { name: "engagedSessions" },
     { name: "engagementRate" },
     { name: "conversions" },
@@ -53,6 +56,7 @@ export async function syncGaSite(analyticsdata, site, defaults) {
     : {
         sessions: 0,
         totalUsers: 0,
+        screenPageViews: 0,
         engagedSessions: 0,
         engagementRate: 0,
         conversions: 0,
@@ -116,6 +120,7 @@ export async function syncGaSite(analyticsdata, site, defaults) {
     summary: {
       sessions: sm.sessions || 0,
       users: sm.totalUsers || 0,
+      pageViews: sm.screenPageViews || 0,
       engagedSessions: sm.engagedSessions || 0,
       engagementRate: sm.engagementRate || 0,
       conversions: sm.conversions || 0,

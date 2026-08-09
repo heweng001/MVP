@@ -36,6 +36,12 @@ export default async function SiteGscPage({ params }: Ctx) {
         >
           查看 GA4 数据
         </Link>
+        <Link
+          href={`/admin/sites/${site.id}/report`}
+          className="text-[var(--brand)] hover:underline"
+        >
+          月度报表
+        </Link>
         {site.promo ? (
           <Link
             href={`/admin/promos/${site.promo.id}/keywords`}

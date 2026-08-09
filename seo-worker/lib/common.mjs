@@ -42,6 +42,41 @@ export function gaDateRange(periodDays) {
   return { startDate: ymd(start), endDate: ymd(end) };
 }
 
+/** 上海时区的今天年月日 */
+export function shanghaiYmdParts(d = new Date()) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t) => Number(parts.find((p) => p.type === t)?.value);
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+export function prevCalendarMonth(year, month) {
+  if (month <= 1) return { year: year - 1, month: 12 };
+  return { year, month: month - 1 };
+}
+
+/**
+ * 自然月日期范围（供月报与询盘同口径）。
+ * end 不超过「今天 − delayDays」（UTC 日历近似，与滚动同步一致）。
+ */
+export function calendarMonthDateRange(year, month, endDelayDays = 2) {
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const endCap = new Date();
+  endCap.setUTCDate(endCap.getUTCDate() - endDelayDays);
+  const endCapStr = ymd(endCap);
+
+  const endDate = endCapStr < startDate ? startDate : endCapStr < monthEnd ? endCapStr : monthEnd;
+  return { startDate, endDate, year, month };
+}
+
 export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }

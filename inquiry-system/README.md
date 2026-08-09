@@ -27,13 +27,14 @@ npm run dev
    - Site Key：后台生成的密钥  
    - 表单 ID 白名单与字段 ID（可选）  
 3. 配置 SMTP（服务商域名），否则开发环境会跳过真实发信并在服务端日志打印标记链接  
-4. 定时任务（建议每 5～15 分钟）：
+4. 定时任务（阿里云 crontab，时区 Asia/Shanghai）：
 
 ```bash
-curl -X POST "https://你的域名/api/cron" -H "x-cron-secret: 你的CRON_SECRET"
+# 每天 12:00 批量转发全部待审核
+curl -X POST "https://你的域名/api/cron?task=review" -H "x-cron-secret: 你的CRON_SECRET"
+# 每月 1 日生成上月月报（可选；也可在后台手点生成）
+curl -X POST "https://你的域名/api/cron?task=monthly-report" -H "x-cron-secret: 你的CRON_SECRET"
 ```
-
-用于：待审超过 6 小时自动发信；发信超过 72 小时未标记 → `timeout_unmarked`。
 
 ## 有效占比与拦截
 

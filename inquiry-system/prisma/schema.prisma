@@ -115,6 +115,10 @@ model Site {
   gaSessions      Int       @default(0)
   /// 近 period 天用户数（缓存）
   gaUsers         Int       @default(0)
+  /// 近 period 天页面浏览量 screenPageViews（缓存）
+  gaPageViews     Int       @default(0)
+  /// 近 period 天互动会话数（缓存）
+  gaEngagedSessions Int     @default(0)
   /// 近 period 天转化次数（关键事件，缓存）
   gaConversions   Int       @default(0)
   /// 近 period 天互动率 0～1（缓存）
@@ -129,6 +133,8 @@ model Site {
   gscPages        SiteGscPage[]
   gaLandingPages  SiteGaLandingPage[]
   gaChannels      SiteGaChannel[]
+  monthlyReports  SiteMonthlyReport[]
+  monthSeoSnapshots SiteMonthSeoSnapshot[]
 
   @@index([clientId])
   @@index([siteType])
@@ -136,6 +142,47 @@ model Site {
   @@index([domain])
   @@index([gscSyncEnabled])
   @@index([gaSyncEnabled])
+}
+
+/// 按自然月冻结的 GSC/GA 数据（供月报与询盘同口径）
+model SiteMonthSeoSnapshot {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  year      Int
+  month     Int
+  startDate String   @default("")
+  endDate   String   @default("")
+  /// JSON：keywords / pages / summary
+  gscJson   String   @default("")
+  /// JSON：summary / landingPages / channels
+  gaJson    String   @default("")
+  gscError  String   @default("")
+  gaError   String   @default("")
+  syncedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, year, month])
+  @@index([siteId, year, month])
+}
+
+/// 网站月度报表快照（询盘自然月 + 同月 GSC/GA）
+model SiteMonthlyReport {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  year        Int
+  month       Int
+  viewToken   String   @unique
+  /// JSON：KPI / Top 明细 / highlights / prev 环比等
+  payload     String
+  workDone    String   @default("")
+  nextPlan    String   @default("")
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([siteId, year, month])
+  @@index([siteId, year, month])
 }
 
 /// GSC 关键词表现缓存（由新加坡 worker 回写）

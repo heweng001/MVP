@@ -126,11 +126,7 @@ export async function siteMonthStats(
     if (r.status === InquiryStatus.AUTO_SPAM) s.autoSpam++;
     if (r.status === InquiryStatus.REVIEW_SPAM) s.reviewSpam++;
     if (r.status === InquiryStatus.REVIEW) s.review++;
-    // 历史「超时未标记」并入待标记统计
-    if (
-      r.status === InquiryStatus.PENDING ||
-      r.status === InquiryStatus.TIMEOUT_UNMARKED
-    ) {
+    if (r.status === InquiryStatus.PENDING) {
       s.pending++;
     }
     if (r.status === InquiryStatus.VALID) s.valid++;

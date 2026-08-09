@@ -1042,6 +1042,9 @@ export function SiteList({
                       >
                         询盘配置
                       </button>
+                      <Link href={`/admin/sites/${s.id}/report`} className="text-[var(--brand)]">
+                        月度报表
+                      </Link>
                       <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
                         编辑
                       </button>
