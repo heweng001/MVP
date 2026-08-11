@@ -811,7 +811,7 @@ export function SiteList({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[980px]">
+        <table className="w-full text-sm min-w-[1040px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">域名</th>
@@ -842,13 +842,16 @@ export function SiteList({
               <th className="px-3 py-2" title="Google Analytics 4 近 N 天缓存（新加坡 seo-worker 同步）">
                 GA
               </th>
+              <th className="px-3 py-2" title="网站月度 SEO 报表">
+                报表
+              </th>
               <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
             {clientGroups.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-10 text-center text-[var(--muted)]">
+                <td colSpan={12} className="px-3 py-10 text-center text-[var(--muted)]">
                   暂无网站
                 </td>
               </tr>
@@ -887,6 +890,26 @@ export function SiteList({
                         >
                           {s.domain}
                         </a>
+                        {s.hasWpCredentials ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => enterWpAdmin(s)}
+                            className="inline-flex items-center justify-center w-5 h-5 rounded text-[var(--muted)] hover:bg-black/5 hover:text-[var(--brand)] shrink-0 disabled:opacity-50"
+                            title="进入 WordPress 后台（遇验证码/安全插件可能失败）"
+                            aria-label="进入 WordPress 后台"
+                          >
+                            <svg
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="w-3.5 h-3.5"
+                              aria-hidden
+                            >
+                              {/* WordPress 风格圆形 W */}
+                              <path d="M10 1.5C5.305 1.5 1.5 5.305 1.5 10S5.305 18.5 10 18.5 18.5 14.695 18.5 10 14.695 1.5 10 1.5zm0 1.35c1.86 0 3.56.66 4.9 1.76L7.78 15.28A7.13 7.13 0 012.85 10c0-3.95 3.2-7.15 7.15-7.15zm0 14.3c-1.64 0-3.16-.55-4.38-1.48l4.72-12.92c.53-.08 1.08-.13 1.64-.13.68 0 1.34.08 1.98.23l-1.55 4.5 1.46 3.99c.05.12.05.25 0 .37L10.9 17.1c-.29.03-.59.05-.9.05zm5.55-1.95c1.04-1.3 1.66-2.95 1.66-4.75 0-2.58-1.37-4.84-3.42-6.1l2.68 7.78c.3.87.38 1.47.38 1.95 0 .39-.05.76-.15 1.12h-.15z" />
+                            </svg>
+                          </button>
+                        ) : null}
                         {multi && idx === 0 && !expanded ? (
                           <span className="text-[11px] text-[var(--muted)] whitespace-nowrap">
                             +{group.sites.length - 1}
@@ -1020,18 +1043,16 @@ export function SiteList({
                         <span className="text-[var(--muted)]">—</span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-xs">
+                      <Link
+                        href={`/admin/sites/${s.id}/report`}
+                        className="text-[var(--brand)] hover:underline whitespace-nowrap"
+                        title="查看月度 SEO 报表"
+                      >
+                        月报
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
-                      {s.hasWpCredentials ? (
-                        <button
-                          type="button"
-                          className="text-[var(--brand)]"
-                          disabled={busy}
-                          onClick={() => enterWpAdmin(s)}
-                          title="新窗口自动提交 WP 登录（遇验证码/安全插件可能失败）"
-                        >
-                          进入后台
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="text-[var(--brand)] font-medium"
@@ -1042,9 +1063,6 @@ export function SiteList({
                       >
                         询盘配置
                       </button>
-                      <Link href={`/admin/sites/${s.id}/report`} className="text-[var(--brand)]">
-                        月度报表
-                      </Link>
                       <button type="button" className="text-[var(--brand)]" onClick={() => openEdit(s)}>
                         编辑
                       </button>
@@ -1242,7 +1260,7 @@ export function SiteList({
               </div>
               <div className="rounded-lg border border-[var(--line)] bg-black/[0.02] p-3 space-y-3">
                 <p className="text-xs text-[var(--muted)] leading-relaxed">
-                  WordPress 运维（可选）：用于「进入后台」与「更新插件」。遇验证码/双因素时自动登录可能失败。
+                  WordPress 运维（可选）：填写后可在域名旁图标进入后台，并支持「更新插件」。遇验证码/双因素时自动登录可能失败。
                 </p>
                 <label className="text-sm block">
                   <span className="text-xs text-[var(--muted)]">后台入口</span>

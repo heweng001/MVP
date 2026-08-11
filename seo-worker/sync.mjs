@@ -22,6 +22,30 @@ import {
 import { syncGscSite } from "./lib/gsc.mjs";
 import { syncGaSite } from "./lib/ga.mjs";
 
+function parseSitesFilter() {
+  const argv = process.argv.slice(2);
+  const eq = argv.find((a) => a.startsWith("--sites="));
+  if (eq) {
+    return eq
+      .slice("--sites=".length)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  const idx = argv.indexOf("--sites");
+  if (idx >= 0 && argv[idx + 1]) {
+    return argv[idx + 1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return null;
+}
+
+function parseGscOnly() {
+  return process.argv.slice(2).includes("--gsc-only");
+}
+
 function parseReportMonthArg() {
   const argv = process.argv.slice(2);
   const eq = argv.find((a) => a.startsWith("--report-month="));
@@ -172,7 +196,15 @@ async function main() {
   const analyticsdata = google.analyticsdata({ version: "v1beta", auth });
 
   const list = await api(base, secret, "/api/seo-worker/sites");
-  const sites = Array.isArray(list.sites) ? list.sites : [];
+  let sites = Array.isArray(list.sites) ? list.sites : [];
+  const sitesFilter = parseSitesFilter();
+  if (sitesFilter?.length) {
+    const want = new Set(sitesFilter);
+    sites = sites.filter((s) => want.has(s.id) || want.has(s.domain));
+    console.log(`[seo-worker] filter sites=${sites.length} ids/domains=${sitesFilter.join(",")}`);
+  }
+  const gscOnly = parseGscOnly();
+  if (gscOnly) console.log("[seo-worker] gsc-only mode");
   console.log(`[seo-worker] sites=${sites.length} base=${base}`);
 
   if (onlyMonth) {
@@ -206,7 +238,7 @@ async function main() {
   for (const site of sites) {
     const label = `${site.domain} (${site.id})`;
     const doGsc = Boolean(site.gsc?.enabled);
-    const doGa = Boolean(site.ga?.enabled);
+    const doGa = !gscOnly && Boolean(site.ga?.enabled);
 
     if (doGsc) {
       try {
@@ -285,23 +317,25 @@ async function main() {
     `[seo-worker] rolling done gsc ok=${gscOk} fail=${gscFail} | ga ok=${gaOk} fail=${gaFail}`,
   );
 
-  const monthList = monthsToSyncFromNow();
-  console.log(
-    `[seo-worker] calendar months: ${monthList.map((x) => `${x.year}-${String(x.month).padStart(2, "0")}`).join(", ")}`,
-  );
-  for (const ym of monthList) {
-    for (const site of sites) {
-      await syncSiteMonth(
-        base,
-        secret,
-        searchconsole,
-        analyticsdata,
-        site,
-        defaults,
-        ym.year,
-        ym.month,
-      );
-      if (defaults.delayMs > 0) await sleep(defaults.delayMs);
+  if (!gscOnly) {
+    const monthList = monthsToSyncFromNow();
+    console.log(
+      `[seo-worker] calendar months: ${monthList.map((x) => `${x.year}-${String(x.month).padStart(2, "0")}`).join(", ")}`,
+    );
+    for (const ym of monthList) {
+      for (const site of sites) {
+        await syncSiteMonth(
+          base,
+          secret,
+          searchconsole,
+          analyticsdata,
+          site,
+          defaults,
+          ym.year,
+          ym.month,
+        );
+        if (defaults.delayMs > 0) await sleep(defaults.delayMs);
+      }
     }
   }
 

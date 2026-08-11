@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/labels";
+import { GaChannelsTable, GaLandingPagesTable } from "@/components/GaSortableTables";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,23 @@ export default async function SiteGaPage({ params }: Ctx) {
     },
   });
   if (!site) notFound();
+
+  const channels = site.gaChannels.map((c) => ({
+    id: c.id,
+    channelGroup: c.channelGroup,
+    sessions: c.sessions,
+    engagedSessions: c.engagedSessions,
+    conversions: c.conversions,
+    engagementRate: c.engagementRate,
+  }));
+  const landings = site.gaLandingPages.map((p) => ({
+    id: p.id,
+    pagePath: p.pagePath,
+    sessions: p.sessions,
+    engagedSessions: p.engagedSessions,
+    conversions: p.conversions,
+    engagementRate: p.engagementRate,
+  }));
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -79,7 +97,8 @@ export default async function SiteGaPage({ params }: Ctx) {
         <div className="sm:col-span-2">
           <div className="text-[var(--muted)]">说明</div>
           <div className="text-[var(--muted)] text-xs leading-relaxed">
-            转化为 GA4「关键事件」次数，与询盘库条数可能不一致。自然搜索关键词请看 GSC，不在此页。
+            转化为 GA4「关键事件」次数，与询盘库条数可能不一致。落地页为会话 Top（默认最多约 100
+            条），可点表头排序。自然搜索关键词请看 GSC。
           </div>
         </div>
         {site.gaLastError ? (
@@ -90,78 +109,24 @@ export default async function SiteGaPage({ params }: Ctx) {
       </div>
 
       <section className="bg-[var(--panel)] border border-[var(--line)] rounded-lg overflow-hidden">
-        <div className="px-3 py-2 text-sm font-medium border-b border-[var(--line)] bg-black/[0.02]">
-          渠道（{site.gaChannels.length}）
+        <div className="px-3 py-2 text-sm font-medium border-b border-[var(--line)] bg-black/[0.02] flex flex-wrap items-baseline justify-between gap-2">
+          <span>渠道（{channels.length}）</span>
+          <span className="text-xs font-normal text-[var(--muted)]">点表头排序</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
-            <thead className="text-left text-[var(--muted)]">
-              <tr>
-                <th className="px-3 py-2">渠道组</th>
-                <th className="px-3 py-2">会话</th>
-                <th className="px-3 py-2">互动会话</th>
-                <th className="px-3 py-2">转化</th>
-                <th className="px-3 py-2">互动率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {site.gaChannels.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-[var(--muted)]">
-                    暂无数据。请开启同步并运行新加坡 seo-worker。
-                  </td>
-                </tr>
-              ) : (
-                site.gaChannels.map((c) => (
-                  <tr key={c.id} className="border-t border-[var(--line)]">
-                    <td className="px-3 py-2">{c.channelGroup}</td>
-                    <td className="px-3 py-2">{c.sessions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{c.engagedSessions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{c.conversions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{pct(c.engagementRate)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <GaChannelsTable rows={channels} />
         </div>
       </section>
 
       <section className="bg-[var(--panel)] border border-[var(--line)] rounded-lg overflow-hidden">
-        <div className="px-3 py-2 text-sm font-medium border-b border-[var(--line)] bg-black/[0.02]">
-          落地页（{site.gaLandingPages.length}）
+        <div className="px-3 py-2 text-sm font-medium border-b border-[var(--line)] bg-black/[0.02] flex flex-wrap items-baseline justify-between gap-2">
+          <span>落地页（{landings.length}）</span>
+          <span className="text-xs font-normal text-[var(--muted)]">
+            会话 Top · 默认最多约 100 条 · 点表头排序
+          </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead className="text-left text-[var(--muted)]">
-              <tr>
-                <th className="px-3 py-2">路径</th>
-                <th className="px-3 py-2">会话</th>
-                <th className="px-3 py-2">互动会话</th>
-                <th className="px-3 py-2">转化</th>
-                <th className="px-3 py-2">互动率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {site.gaLandingPages.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-[var(--muted)]">
-                    暂无落地页数据
-                  </td>
-                </tr>
-              ) : (
-                site.gaLandingPages.map((p) => (
-                  <tr key={p.id} className="border-t border-[var(--line)]">
-                    <td className="px-3 py-2 break-all font-mono text-xs">{p.pagePath}</td>
-                    <td className="px-3 py-2">{p.sessions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{p.engagedSessions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{p.conversions.toLocaleString()}</td>
-                    <td className="px-3 py-2">{pct(p.engagementRate)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <GaLandingPagesTable rows={landings} />
         </div>
       </section>
     </div>
