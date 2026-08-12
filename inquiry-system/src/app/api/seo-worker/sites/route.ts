@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { assertSeoWorkerAuth, guessGscPropertyUrl } from "@/lib/seo-worker-auth";
-import { dedupeKeywords } from "@/lib/promo";
+import { flattenKeywordList } from "@/lib/promo";
 
 export const runtime = "nodejs";
 
@@ -41,10 +41,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     sites: sites.map((s) => {
       const propertyUrl = (s.gscPropertyUrl || "").trim() || guessGscPropertyUrl(s.domain);
-      const keywords = dedupeKeywords(s.promo?.keywords || "").text
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean);
+      const keywords = flattenKeywordList(s.promo?.keywords || "");
       return {
         id: s.id,
         domain: s.domain,

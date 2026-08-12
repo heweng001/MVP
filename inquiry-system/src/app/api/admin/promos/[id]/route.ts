@@ -5,6 +5,7 @@ import {
   dedupeKeywords,
   editLinkExpiresAt,
   newEditToken,
+  normalizeKeywordsInput,
   promoDisplayLabel,
   promoEditUrl,
   recordPromoHistory,
@@ -52,8 +53,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   const data: Record<string, string | null> = {};
   let keywordDedupe: ReturnType<typeof dedupeKeywords> | null = null;
-  if (body.keywords !== undefined) {
-    keywordDedupe = dedupeKeywords(String(body.keywords));
+  if (body.keywords !== undefined || body.categories !== undefined) {
+    keywordDedupe = normalizeKeywordsInput(body);
     data.keywords = keywordDedupe.text;
   }
   if (body.productPoints !== undefined) data.productPoints = String(body.productPoints);

@@ -75,7 +75,7 @@ export function PromoPublicEditor({
         <div className="text-sm">
           <div className="font-medium">关键词列表</div>
           <p className="text-xs text-[var(--muted)] mt-0.5">
-            点进另页编辑 · 当前 {keywordLines} 行
+            点进另页编辑 · 支持分类 · 当前 {keywordLines} 词
           </p>
         </div>
         <Link

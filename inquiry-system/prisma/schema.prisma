@@ -36,7 +36,7 @@ model ClientPromo {
   /// 可选关联网站；唯一，保证一站一条
   siteId           String?   @unique
   site             Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  /// 关键词列表（客户可见，一行一个；另页编辑）
+  /// 关键词列表（客户可见；JSON 分类数组，或旧版一行一个纯文本）
   keywords         String    @default("")
   /// 关键词内部备注（仅后台）
   keywordsNote     String    @default("")

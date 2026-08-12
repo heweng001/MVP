@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  dedupeKeywords,
   getPromoByEditToken,
   isEditTokenValid,
+  normalizeKeywordsInput,
   promoDisplayLabel,
   recordPromoHistory,
 } from "@/lib/promo";
@@ -46,10 +46,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   if (body.onlyKeywords) {
-    if (body.keywords === undefined) {
+    if (body.keywords === undefined && body.categories === undefined) {
       return NextResponse.json({ error: "缺少关键词内容" }, { status: 400 });
     }
-    const deduped = dedupeKeywords(String(body.keywords));
+    const deduped = normalizeKeywordsInput(body);
     await prisma.clientPromo.update({
       where: { id: promo.id },
       data: { keywords: deduped.text },
@@ -66,7 +66,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   const keywords =
-    body.keywords !== undefined ? dedupeKeywords(String(body.keywords)).text : promo.keywords;
+    body.keywords !== undefined || body.categories !== undefined
+      ? normalizeKeywordsInput(body).text
+      : promo.keywords;
 
   await prisma.clientPromo.update({
     where: { id: promo.id },

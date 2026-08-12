@@ -148,7 +148,7 @@ export function PromoEditor({
         <div className="text-sm">
           <div className="font-medium">关键词列表</div>
           <p className="text-xs text-[var(--muted)] mt-0.5">
-            另页编辑 · 当前 {keywordLines} 行 · 客户链接请在列表页生成/复制
+            另页编辑 · 支持自定义分类 · 当前 {keywordLines} 词 · 客户链接请在列表页生成/复制
           </p>
         </div>
         <Link
