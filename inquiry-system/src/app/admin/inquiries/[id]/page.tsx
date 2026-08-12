@@ -5,6 +5,7 @@ import { InquiryActions } from "@/components/InquiryActions";
 import { PageHeader } from "@/components/PageHeader";
 import { collectInquiryFieldParts, resolveInquiryName } from "@/lib/inquiry-mail-fields";
 import { resolveRecipients } from "@/lib/pipeline";
+import { aiLabelDisplay, parseAiReasons } from "@/lib/inquiry-ai";
 import { format } from "date-fns";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -53,6 +54,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
   } catch {
     hits = [];
   }
+  const aiReasons = parseAiReasons(item.aiReasonsJson);
 
   const displayName = resolveInquiryName(item.rawPayload, item.name);
   const parts = collectInquiryFieldParts({
@@ -105,6 +107,39 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dt className="text-[var(--muted)]">垃圾分</dt>
             <dd>{item.spamScore}</dd>
           </div>
+          <div>
+            <dt className="text-[var(--muted)]">AI 判定（DeepSeek）</dt>
+            <dd>
+              {aiLabelDisplay(item.aiSpamLabel)}
+              {item.aiConfidence != null ? ` · 把握 ${item.aiConfidence}%` : ""}
+              {item.aiError ? (
+                <span className="text-[var(--muted)] text-xs ml-1" title={item.aiError}>
+                  （分析失败）
+                </span>
+              ) : null}
+            </dd>
+          </div>
+          <div className="md:col-span-2">
+            <dt className="text-[var(--muted)]">AI 摘要</dt>
+            <dd className="mt-1 text-sm whitespace-pre-wrap">
+              {item.aiSummaryZh?.trim() || "—"}
+              <span className="block text-[11px] text-[var(--muted)] mt-1">
+                DeepSeek 自动生成，仅供参考，不影响系统分流。
+              </span>
+            </dd>
+          </div>
+          {aiReasons.length ? (
+            <div className="md:col-span-2">
+              <dt className="text-[var(--muted)] mb-1">AI 原因</dt>
+              <dd>
+                <ul className="text-sm list-disc pl-5">
+                  {aiReasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-[var(--muted)]">Form / Entry</dt>
             <dd>

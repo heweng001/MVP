@@ -301,6 +301,15 @@ model Inquiry {
   notes           String    @default("")
   degraded        Boolean   @default(false)
   autoSentReview  Boolean   @default(false)
+  /// DeepSeek 旁路判定：spam | ham | ""（未分析）；不影响路由
+  aiSpamLabel     String    @default("")
+  /// 0–100；未分析为 null
+  aiConfidence    Int?
+  aiReasonsJson   String    @default("[]")
+  /// 一句话中文摘要（列表悬停/邮件共用）
+  aiSummaryZh     String    @default("")
+  aiAnalyzedAt    DateTime?
+  aiError         String    @default("")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

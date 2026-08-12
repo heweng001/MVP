@@ -74,6 +74,8 @@ export type InquiryMailPayload = {
   includeMarkButtons?: boolean;
   /** 邮件主题后缀区分 */
   phase?: "mark" | "followup";
+  /** DeepSeek 询盘质量一句摘要（仅第一封；空则不展示） */
+  aiQualityHint?: string;
 };
 
 function parseList(s: string) {
@@ -163,6 +165,15 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ? `<div style="margin:12px 0 16px;">${hintHtml(payload.doNotReplyHint)}</div>`
     : "";
 
+  const aiHint = (payload.aiQualityHint || "").trim();
+  const aiBlockHtml = aiHint
+    ? `
+    <div style="margin-top:16px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+      <p style="margin:0 0 6px;font-size:13px;color:#334155;"><strong>AI 参考（DeepSeek）</strong>：${escapeHtml(aiHint)}</p>
+      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">本结论由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准，并使用下方按钮标记有效/无效。</p>
+    </div>`
+    : "";
+
   const markBlockHtml = includeMark
     ? `
     <div style="margin-top:16px;">
@@ -198,6 +209,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ${fieldsTableHtml}
     ${attachNoteHtml}
     ${separatorHtml}
+    ${aiBlockHtml}
     ${markBlockHtml}
     ${belowRowsHtml}
   </div>`;
@@ -207,6 +219,13 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
   ];
+  if (aiHint) {
+    textParts.push(
+      "",
+      `AI 参考（DeepSeek）：${aiHint}`,
+      "本结论由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准，并使用下方按钮标记有效/无效。",
+    );
+  }
   if (includeMark) {
     textParts.push(
       "",

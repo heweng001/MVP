@@ -195,18 +195,34 @@ export default async function InquiriesPage({
       year={hasMonth ? year : undefined}
       month={hasMonth ? month : undefined}
       sites={sites.map((s) => ({ id: s.id, domain: s.domain }))}
-      items={items.map((item) => ({
-        id: item.id,
-        status: item.status,
-        name: item.name,
-        email: item.email,
-        message: item.message,
-        markReason: item.markReason || "",
-        spamScore: item.spamScore,
-        submittedAt: format(item.submittedAt, "MM-dd HH:mm"),
-        domain: item.site.domain,
-        clientName: item.site.client.name,
-      }))}
+      items={items.map((item) => {
+        let aiReasons: string[] = [];
+        try {
+          const parsed = JSON.parse(item.aiReasonsJson || "[]");
+          aiReasons = Array.isArray(parsed)
+            ? parsed.map((x: unknown) => String(x)).filter(Boolean)
+            : [];
+        } catch {
+          aiReasons = [];
+        }
+        return {
+          id: item.id,
+          status: item.status,
+          name: item.name,
+          email: item.email,
+          message: item.message,
+          markReason: item.markReason || "",
+          spamScore: item.spamScore,
+          aiSpamLabel: item.aiSpamLabel || "",
+          aiConfidence: item.aiConfidence,
+          aiReasons,
+          aiSummaryZh: item.aiSummaryZh || "",
+          aiError: item.aiError || "",
+          submittedAt: format(item.submittedAt, "MM-dd HH:mm"),
+          domain: item.site.domain,
+          clientName: item.site.client.name,
+        };
+      })}
     />
   );
 }

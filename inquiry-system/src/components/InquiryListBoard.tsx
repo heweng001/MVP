@@ -15,6 +15,11 @@ export type InquiryListItem = {
   message: string;
   markReason: string;
   spamScore: number;
+  aiSpamLabel: string;
+  aiConfidence: number | null;
+  aiReasons: string[];
+  aiSummaryZh: string;
+  aiError: string;
   submittedAt: string;
   domain: string;
   clientName: string;
@@ -131,7 +136,7 @@ export function InquiryListBoard({
 
   const isReviewTab = tab === "review";
 
-  const colSpan = (showStatusColumn ? 8 : 7) + 1;
+  const colSpan = (showStatusColumn ? 8 : 7) + 1 + 3;
 
   return (
     <div className="space-y-3">
@@ -270,7 +275,7 @@ export function InquiryListBoard({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[1000px]">
+        <table className="w-full text-xs min-w-[1180px]">
           <thead className="bg-slate-50 text-left text-[var(--muted)]">
             <tr>
               <th className="px-2 py-1.5 w-8">
@@ -285,6 +290,19 @@ export function InquiryListBoard({
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">网站</th>
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">联系人</th>
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">分</th>
+              <th
+                className="px-2 py-1.5 font-medium whitespace-nowrap"
+                title="DeepSeek 旁路判定，仅供参考，不影响拦截路由"
+              >
+                AI判定
+              </th>
+              <th
+                className="px-2 py-1.5 font-medium whitespace-nowrap"
+                title="模型对本次判定的把握程度"
+              >
+                AI把握
+              </th>
+              <th className="px-2 py-1.5 font-medium min-w-[120px]">AI原因</th>
               {showStatusColumn ? (
                 <th className="px-2 py-1.5 font-medium whitespace-nowrap">状态</th>
               ) : null}
@@ -344,6 +362,50 @@ export function InquiryListBoard({
                       </div>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">{item.spamScore}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      {item.aiSpamLabel === "spam" ? (
+                        <span
+                          className="text-rose-700"
+                          title={item.aiSummaryZh || "DeepSeek：疑似垃圾（仅供参考）"}
+                        >
+                          疑似垃圾
+                        </span>
+                      ) : item.aiSpamLabel === "ham" ? (
+                        <span
+                          className="text-emerald-700"
+                          title={item.aiSummaryZh || "DeepSeek：偏正常（仅供参考）"}
+                        >
+                          偏正常
+                        </span>
+                      ) : item.aiError ? (
+                        <span className="text-[var(--muted)]" title={item.aiError}>
+                          失败
+                        </span>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-[var(--muted)]">
+                      {item.aiConfidence != null ? `${item.aiConfidence}%` : "—"}
+                    </td>
+                    <td className="px-2 py-1 max-w-[140px]">
+                      {item.aiReasons.length ? (
+                        <div
+                          className="line-clamp-2 leading-snug text-[11px] cursor-default"
+                          title={item.aiReasons.join("；")}
+                        >
+                          {item.aiReasons[0]}
+                          {item.aiReasons.length > 1 ? (
+                            <span className="text-[var(--muted)]">
+                              {" "}
+                              +{item.aiReasons.length - 1}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
+                    </td>
                     {showStatusColumn ? (
                       <td className="px-2 py-1 whitespace-nowrap">
                         <span

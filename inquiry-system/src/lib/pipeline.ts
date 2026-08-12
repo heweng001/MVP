@@ -10,6 +10,7 @@ import {
   resolveInquiryName,
 } from "./inquiry-mail-fields";
 import { mailContentGate } from "./mail-content-gate";
+import { ensureInquiryAiForMail, runInquiryAiAnalysis } from "./inquiry-ai";
 
 export type IngestBody = {
   site_key: string;
@@ -86,6 +87,7 @@ async function buildSendPayload(
     formId: string;
     entryId: string;
     rawPayload: string;
+    aiSummaryZh?: string;
     site: { domain: string; siteType: string; endDate: Date | string | null };
   },
   phase: "mark" | "followup",
@@ -135,11 +137,14 @@ async function buildSendPayload(
     replyToBuyer: content.replyToBuyer,
     includeMarkButtons: content.includeMarkButtons,
     phase,
+    aiQualityHint: phase === "mark" ? (inquiry.aiSummaryZh || "").trim() : "",
   };
 }
 
 /** 第一封：标记邮件 */
 export async function sendInquiryById(inquiryId: string, opts?: SendInquiryOpts) {
+  await ensureInquiryAiForMail(inquiryId);
+
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     include: { site: true },
@@ -358,6 +363,8 @@ export async function ingestInquiry(body: IngestBody) {
   });
 
   if (status === InquiryStatus.PENDING) {
+    // 发信前短超时同步分析，便于邮件带上 AI 摘要；失败不影响路由与发信
+    await runInquiryAiAnalysis(inquiry.id);
     try {
       await sendInquiryById(inquiry.id, { degraded });
     } catch (e) {
@@ -374,6 +381,11 @@ export async function ingestInquiry(body: IngestBody) {
         console.error("[ingest] retry send failed", e2);
       }
     }
+  } else {
+    // 不改路由；列表旁路异步补全（不等待）
+    void runInquiryAiAnalysis(inquiry.id).catch((e) =>
+      console.error("[ingest] async inquiry-ai failed", inquiry.id, e),
+    );
   }
 
   const fresh = await prisma.inquiry.findUniqueOrThrow({ where: { id: inquiry.id } });
