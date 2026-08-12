@@ -91,6 +91,16 @@ export async function POST(req: NextRequest) {
         ? kwNorm.reduce((s, r) => s + r.position, 0) / kwNorm.length
         : null;
 
+  // 站点列表 KPI：优先用 worker 全量 summary（有展示词/页），勿用详情 Top 截断条数
+  const kwCountRaw = Number((summary as { keywordCount?: number }).keywordCount);
+  const pageCountRaw = Number((summary as { pageCount?: number }).pageCount);
+  const gscKeywordCount =
+    Number.isFinite(kwCountRaw) && kwCountRaw >= 0 ? Math.round(kwCountRaw) : kwNorm.length;
+  const gscPageCount =
+    Number.isFinite(pageCountRaw) && pageCountRaw >= 0
+      ? Math.round(pageCountRaw)
+      : pageNorm.length;
+
   await prisma.$transaction(async (tx) => {
     await tx.siteGscKeyword.deleteMany({ where: { siteId } });
     await tx.siteGscPage.deleteMany({ where: { siteId } });
@@ -131,8 +141,8 @@ export async function POST(req: NextRequest) {
         gscLastSyncAt: syncTime,
         gscLastError: "",
         gscPeriodDays: periodDays,
-        gscKeywordCount: kwNorm.length,
-        gscPageCount: pageNorm.length,
+        gscKeywordCount,
+        gscPageCount,
         gscAvgPosition: avgPosition,
         gscPropertyUrl:
           body.propertyUrl !== undefined
@@ -147,5 +157,7 @@ export async function POST(req: NextRequest) {
     siteId,
     keywords: kwNorm.length,
     pages: pageNorm.length,
+    keywordCount: gscKeywordCount,
+    pageCount: gscPageCount,
   });
 }

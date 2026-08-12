@@ -276,7 +276,7 @@ export function InquiryListBoard({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-lg overflow-x-auto">
-        <table className="w-full text-xs min-w-[1180px]">
+        <table className="admin-table w-full text-xs min-w-[1180px]">
           <thead className="bg-slate-50 text-left text-[var(--muted)]">
             <tr>
               <th className="px-2 py-1.5 w-8">
@@ -326,9 +326,7 @@ export function InquiryListBoard({
                 return (
                   <tr
                     key={item.id}
-                    className={`border-t border-[var(--line)] align-top hover:bg-black/[0.015] ${
-                      checked ? "bg-teal-50/40" : ""
-                    }`}
+                    className={`admin-tr align-top ${checked ? "admin-tr-active" : ""}`}
                   >
                     <td className="px-2 py-1">
                       <input

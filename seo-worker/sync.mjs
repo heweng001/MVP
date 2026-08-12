@@ -249,7 +249,7 @@ async function main() {
           body: payload,
         });
         console.log(
-          `[seo-worker] GSC ok ${label} keywords=${payload.keywords.length} pages=${payload.pages.length}`,
+          `[seo-worker] GSC ok ${label} stored=${payload.keywords.length}/${payload.pages.length} total=${payload.summary?.keywordCount ?? "?"}/${payload.summary?.pageCount ?? "?"}`,
         );
         gscOk++;
       } catch (e) {

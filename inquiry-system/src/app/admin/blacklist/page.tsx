@@ -28,7 +28,7 @@ export default async function BlacklistPage() {
       />
       <BlacklistForm sites={sites.map((s) => ({ id: s.id, name: s.domain }))} />
       <div className="bg-white border border-[var(--line)] rounded-lg overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
+        <table className="admin-table w-full text-sm">
           <thead className="bg-slate-50 text-left text-[var(--muted)]">
             <tr>
               <th className="px-4 py-2.5 font-medium">类型</th>
@@ -39,7 +39,7 @@ export default async function BlacklistPage() {
           </thead>
           <tbody>
             {items.map((i) => (
-              <tr key={i.id} className="border-t border-[var(--line)]">
+              <tr key={i.id} className="admin-tr">
                 <td className="px-4 py-2">{i.type}</td>
                 <td className="px-4 py-2">{i.value}</td>
                 <td className="px-4 py-2">{i.site?.domain || "全局"}</td>

@@ -141,7 +141,7 @@ export function PromoList({
       </form>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
+        <table className="admin-table w-full text-sm min-w-[900px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">ID</th>
@@ -164,7 +164,7 @@ export function PromoList({
                 const link = links[row.id];
                 const busy = busyId === row.id;
                 return (
-                  <tr key={row.id} className="border-t border-[var(--line)] align-top">
+                  <tr key={row.id} className="admin-tr align-top">
                     <td className="px-3 py-2 font-mono text-xs">{row.id.slice(0, 10)}…</td>
                     <td className="px-3 py-2">
                       {row.site ? (

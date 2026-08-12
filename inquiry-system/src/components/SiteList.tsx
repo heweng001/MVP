@@ -811,7 +811,7 @@ export function SiteList({
       </div>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[1040px]">
+        <table className="admin-table w-full text-sm min-w-[1040px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">域名</th>
@@ -861,7 +861,10 @@ export function SiteList({
                 const expanded = expandedClients.has(group.clientId);
                 const visible = multi && !expanded ? group.sites.slice(0, 1) : group.sites;
                 return visible.map((s, idx) => (
-                  <tr key={s.id} className="border-t border-[var(--line)]">
+                  <tr
+                    key={s.id}
+                    className={`admin-tr ${configSite?.id === s.id ? "admin-tr-active" : ""}`}
+                  >
                     <td className="px-3 py-2 font-medium">
                       <div className="flex items-center gap-1.5">
                         {multi && idx === 0 ? (

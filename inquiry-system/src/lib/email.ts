@@ -94,7 +94,7 @@ export function parseEmails(toEmails: string, ccEmails = "") {
   };
 }
 
-function renderFieldRowsHtml(rows: MailFieldRow[], labelWidth = "110px") {
+function renderFieldRowsHtml(rows: MailFieldRow[]) {
   return rows
     .map((f) => {
       const body = f.hint
@@ -102,7 +102,13 @@ function renderFieldRowsHtml(rows: MailFieldRow[], labelWidth = "110px") {
         : f.html
           ? sanitizeJourneyHtml(f.value)
           : nl2br(escapeHtml(f.value));
-      return `<tr><td style="padding:6px 0;color:#666;width:${labelWidth};vertical-align:top;">${escapeHtml(f.label)}</td><td style="padding:6px 0;vertical-align:top;">${body}</td></tr>`;
+      // 上下布局：标签在上、内容在下（移动端更易读；邮件客户端用 table 更稳）
+      return `<tr>
+  <td style="padding:12px 0 2px;font-size:12px;line-height:1.4;color:#64748b;font-weight:600;">${escapeHtml(f.label)}</td>
+</tr>
+<tr>
+  <td style="padding:0 0 12px;font-size:15px;line-height:1.55;color:#0f172a;word-break:break-word;border-bottom:1px solid #e2e8f0;">${body}</td>
+</tr>`;
     })
     .join("");
 }
@@ -157,8 +163,8 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const belowRowsHtml = below.length
     ? `
     <div style="margin-top:20px;">
-      <table style="border-collapse:collapse;width:100%;max-width:640px;">
-        ${renderFieldRowsHtml(below, "150px")}
+      <table role="presentation" style="border-collapse:collapse;width:100%;max-width:640px;">
+        ${renderFieldRowsHtml(below)}
       </table>
     </div>`
     : "";
@@ -196,12 +202,20 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const markBlockHtml = includeMark
     ? `
     <div style="margin-top:16px;">
-      <p><strong>请配合标记本封询盘，有利于我们提升询盘质量</strong></p>
-      <p>
-        <a href="${validUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 16px;margin-right:10px;border-radius:4px;">标为有效</a>
-        <a href="${invalidUrl}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 16px;border-radius:4px;">标为无效</a>
-      </p>
-      <p style="color:#888;font-size:12px;">点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记</p>
+      <p style="margin:0 0 10px;"><strong>请配合标记本封询盘，有利于我们提升询盘质量</strong></p>
+      <table role="presentation" style="border-collapse:collapse;width:100%;max-width:640px;">
+        <tr>
+          <td style="padding:0 0 8px;">
+            <a href="${validUrl}" style="display:block;width:100%;box-sizing:border-box;text-align:center;background:#0f766e;color:#fff;text-decoration:none;padding:12px 16px;border-radius:6px;font-size:15px;">标为有效</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0;">
+            <a href="${invalidUrl}" style="display:block;width:100%;box-sizing:border-box;text-align:center;background:#b45309;color:#fff;text-decoration:none;padding:12px 16px;border-radius:6px;font-size:15px;">标为无效</a>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#888;font-size:12px;margin:10px 0 0;">点击按钮将立即完成标记。发信超过 72 小时后不可再标无效，请及时标记</p>
     </div>`
     : "";
 
@@ -219,11 +233,11 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     : "";
 
   const fieldsTableHtml = extra.length
-    ? `<table style="border-collapse:collapse;width:100%;max-width:640px;">${extraRowsHtml}</table>`
+    ? `<table role="presentation" style="border-collapse:collapse;width:100%;max-width:640px;">${extraRowsHtml}</table>`
     : `<p style="color:#888;">（本封询盘暂无可见字段）</p>`;
 
   const html = `
-  <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
+  <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;max-width:640px;margin:0 auto;">
     ${doNotReplyHtml}
     ${fieldsTableHtml}
     ${attachNoteHtml}

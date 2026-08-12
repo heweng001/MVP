@@ -125,7 +125,7 @@ export function ClientList({
       </form>
 
       <div className="bg-white border border-[var(--line)] rounded-xl overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
+        <table className="admin-table w-full text-sm min-w-[720px]">
           <thead className="bg-black/[0.02] text-left text-[var(--muted)]">
             <tr>
               <th className="px-3 py-2">客户名称</th>
@@ -145,7 +145,7 @@ export function ClientList({
               </tr>
             ) : (
               initialClients.map((c) => (
-                <tr key={c.id} className="border-t border-[var(--line)] align-top">
+                <tr key={c.id} className="admin-tr align-top">
                   <td className="px-3 py-2 font-medium">{c.name}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{contactLine(c)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(c.lastVisitAt)}</td>

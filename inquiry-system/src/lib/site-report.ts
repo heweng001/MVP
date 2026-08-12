@@ -220,7 +220,7 @@ function buildSearchFunnel(
         label: "网站页面数",
         value: hasWp ? sitePageCount : null,
         hint: hasWp
-          ? "WordPress 已发布文章+页面"
+          ? "WordPress 公开内容：已发布文章/页面/产品等 CPT（不含媒体与模板）"
           : "未能拉取 WP 页面总数，故不展示（≠用可见页占位）",
       },
       {

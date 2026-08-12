@@ -174,7 +174,7 @@ export function StatsSiteTable({
       </div>
       {/* 约 20 行可视高度：表头 + 20×行高 */}
       <div className="overflow-auto" style={{ height: "calc(2.5rem + 20 * 2.25rem)" }}>
-        <table className="w-full text-sm min-w-[900px]">
+        <table className="admin-table w-full text-sm min-w-[900px]">
           <thead className="bg-slate-50 text-left text-[var(--muted)] sticky top-0 z-10">
             <tr>
               <SortTh label="站点" col="domain" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -245,7 +245,7 @@ export function StatsSiteTable({
                   valid: prev?.valid ?? 0,
                 };
                 return (
-                  <tr key={s.siteId} className="border-t border-[var(--line)] h-9">
+                  <tr key={s.siteId} className="admin-tr h-9">
                     <td className="px-4 py-2">{s.domain}</td>
                     <td className="px-4 py-2">{s.clientName || "—"}</td>
                     <td className="px-4 py-2">

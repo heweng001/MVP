@@ -66,7 +66,7 @@ export function SortableMetricTable<T extends { id: string }>({
   }
 
   return (
-    <table className="w-full text-sm min-w-[640px]">
+    <table className="admin-table w-full text-sm min-w-[640px]">
       <thead className="text-left text-[var(--muted)]">
         <tr>
           {columns.map((c) => {
@@ -105,7 +105,7 @@ export function SortableMetricTable<T extends { id: string }>({
           </tr>
         ) : (
           sorted.map((row) => (
-            <tr key={row.id} className="border-t border-[var(--line)]">
+            <tr key={row.id} className="admin-tr">
               {columns.map((c) => (
                 <td
                   key={c.key}

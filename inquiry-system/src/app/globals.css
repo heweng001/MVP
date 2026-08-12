@@ -90,3 +90,27 @@ select:focus {
 .ProseMirror-selectednode {
   outline: 2px solid color-mix(in srgb, var(--brand) 50%, transparent);
 }
+
+/* 后台列表：行悬停 / 选中，方便扫表定位 */
+.admin-tr {
+  border-top: 1px solid var(--line);
+  transition: background-color 0.12s ease;
+}
+.admin-tr:hover {
+  background-color: color-mix(in srgb, var(--brand) 7%, white);
+}
+.admin-tr-active {
+  background-color: color-mix(in srgb, var(--brand) 12%, white);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.admin-tr-active:hover {
+  background-color: color-mix(in srgb, var(--brand) 14%, white);
+}
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+

@@ -92,7 +92,7 @@ export function getDemoReportPayload(): SiteReportPayload {
           label: "网站页面数",
           value: 128,
           prevValue: 120,
-          hint: "WordPress 已发布文章+页面",
+          hint: "WordPress 公开内容：已发布文章/页面/产品等 CPT（不含媒体与模板）",
         },
         {
           key: "visiblePages",
