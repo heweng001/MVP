@@ -7,17 +7,22 @@ export type InquiryAiResult = {
   confidence: number;
   reasons: string[];
   summaryZh: string;
+  messageZh: string;
 };
 
-const SYSTEM_PROMPT = `你是 B2B 外贸网站询盘质检助手。根据询盘内容判断是否更像垃圾/推销（而非真实采购询价）。
+const SYSTEM_PROMPT = `你是 B2B 外贸网站询盘质检与翻译助手。根据询盘内容：
+A) 判断是否更像垃圾/推销（而非真实采购询价）；
+B) 将询盘正文翻译成简体中文，便于中文用户阅读。
+
 必须遵守：
 1. 外贸询价特征（询价、MOQ、OEM/ODM、样品、FOB/CIF、规格数量等）优先判为正常（is_spam=false）。
 2. SEO/外链/guest post/站长合作/泛泛营销推销优先判为垃圾（is_spam=true）。
 3. confidence 为你对本次 is_spam 结论的把握（0～1），不是「有多垃圾」。
 4. reasons 写 1～3 条简短中文依据，面向运营可读。
-5. 只根据提供的字段判断，不要编造未出现的事实。
+5. message_zh：把 message 译成通顺简体中文；保留数字、型号、规格；不要翻译或改写邮箱、电话、URL；若原文已是中文，message_zh 可与原文一致或略作通顺。无正文时 message_zh 为空字符串。
+6. 只根据提供的字段判断/翻译，不要编造未出现的事实。
 只输出一个 JSON 对象，不要 Markdown：
-{"is_spam":true或false,"confidence":0.0到1.0,"reasons":["..."]}`;
+{"is_spam":true或false,"confidence":0.0到1.0,"reasons":["..."],"message_zh":"..."}`;
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
@@ -66,11 +71,15 @@ function normalizeAiResult(raw: unknown): InquiryAiResult {
         .filter(Boolean)
         .slice(0, 3)
     : [];
+  const messageZh = String(o.message_zh ?? o.messageZh ?? "")
+    .trim()
+    .slice(0, 8000);
   return {
     isSpam,
     confidence: confidencePct,
     reasons,
     summaryZh: buildAiSummaryZh(isSpam, confidencePct, reasons),
+    messageZh,
   };
 }
 
@@ -139,7 +148,7 @@ async function callDeepSeekClassify(input: AnalyzeInput): Promise<InquiryAiResul
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
-          content: `请分析以下询盘：\n${JSON.stringify(userPayload)}`,
+          content: `请分析并翻译以下询盘：\n${JSON.stringify(userPayload)}`,
         },
       ],
       response_format: { type: "json_object" },
@@ -158,7 +167,8 @@ async function callDeepSeekClassify(input: AnalyzeInput): Promise<InquiryAiResul
   return normalizeAiResult(extractJsonObject(content));
 }
 
-const DEFAULT_TIMEOUT_MS = 4000;
+/** 含翻译，发信前略放宽超时 */
+const DEFAULT_TIMEOUT_MS = 8000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -188,12 +198,19 @@ export async function runInquiryAiAnalysis(
     include: { site: { select: { domain: true, productKeywords: true } } },
   });
   if (!inquiry) return null;
-  if (!opts?.force && inquiry.aiAnalyzedAt && !inquiry.aiError) {
+  if (
+    !opts?.force &&
+    inquiry.aiAnalyzedAt &&
+    !inquiry.aiError &&
+    inquiry.aiSummaryZh &&
+    inquiry.aiMessageZh
+  ) {
     return {
       isSpam: inquiry.aiSpamLabel === "spam",
       confidence: inquiry.aiConfidence ?? 0,
       reasons: parseAiReasons(inquiry.aiReasonsJson),
       summaryZh: inquiry.aiSummaryZh,
+      messageZh: inquiry.aiMessageZh,
     };
   }
 
@@ -211,6 +228,9 @@ export async function runInquiryAiAnalysis(
       }),
       timeoutMs,
     );
+    if (!result.messageZh && !inquiry.message.trim()) {
+      result.messageZh = "（无正文）";
+    }
     await prisma.inquiry.update({
       where: { id: inquiryId },
       data: {
@@ -218,6 +238,7 @@ export async function runInquiryAiAnalysis(
         aiConfidence: result.confidence,
         aiReasonsJson: JSON.stringify(result.reasons),
         aiSummaryZh: result.summaryZh,
+        aiMessageZh: result.messageZh,
         aiAnalyzedAt: new Date(),
         aiError: "",
       },
@@ -237,14 +258,14 @@ export async function runInquiryAiAnalysis(
   }
 }
 
-/** 发第一封提醒前：若尚未成功分析则再试一次（短超时） */
+/** 发第一封提醒前：若缺少判定摘要或中文译文则再试一次 */
 export async function ensureInquiryAiForMail(inquiryId: string) {
   const row = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
-    select: { aiSummaryZh: true, aiAnalyzedAt: true, aiError: true },
+    select: { aiSummaryZh: true, aiMessageZh: true, aiAnalyzedAt: true, aiError: true },
   });
   if (!row) return;
-  if (row.aiSummaryZh?.trim()) return;
+  if (row.aiSummaryZh?.trim() && row.aiMessageZh?.trim()) return;
   if (!isDeepSeekConfigured()) return;
   await runInquiryAiAnalysis(inquiryId, { timeoutMs: DEFAULT_TIMEOUT_MS, force: true });
 }

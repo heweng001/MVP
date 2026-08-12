@@ -19,6 +19,7 @@ export type InquiryListItem = {
   aiConfidence: number | null;
   aiReasons: string[];
   aiSummaryZh: string;
+  aiMessageZh: string;
   aiError: string;
   submittedAt: string;
   domain: string;
@@ -431,6 +432,14 @@ export function InquiryListBoard({
                       >
                         {body || <span className="text-[var(--muted)]">(无正文)</span>}
                       </div>
+                      {item.aiMessageZh ? (
+                        <div
+                          className="mt-0.5 line-clamp-2 leading-snug text-[10px] text-[var(--muted)] cursor-default"
+                          title={`中文译文：${item.aiMessageZh}`}
+                        >
+                          译：{item.aiMessageZh}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-2 py-1 max-w-[200px]">
                       {item.markReason ? (

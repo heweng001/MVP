@@ -128,6 +128,12 @@ export default async function InquiryDetailPage({ params }: Ctx) {
               </span>
             </dd>
           </div>
+          <div className="md:col-span-2">
+            <dt className="text-[var(--muted)]">中文译文（DeepSeek）</dt>
+            <dd className="mt-1 text-sm whitespace-pre-wrap rounded-lg border border-[var(--line)] bg-slate-50/80 px-3 py-2">
+              {item.aiMessageZh?.trim() || "—"}
+            </dd>
+          </div>
           {aiReasons.length ? (
             <div className="md:col-span-2">
               <dt className="text-[var(--muted)] mb-1">AI 原因</dt>

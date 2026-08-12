@@ -217,6 +217,7 @@ export default async function InquiriesPage({
           aiConfidence: item.aiConfidence,
           aiReasons,
           aiSummaryZh: item.aiSummaryZh || "",
+          aiMessageZh: item.aiMessageZh || "",
           aiError: item.aiError || "",
           submittedAt: format(item.submittedAt, "MM-dd HH:mm"),
           domain: item.site.domain,

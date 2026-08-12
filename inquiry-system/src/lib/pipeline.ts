@@ -88,6 +88,7 @@ async function buildSendPayload(
     entryId: string;
     rawPayload: string;
     aiSummaryZh?: string;
+    aiMessageZh?: string;
     site: { domain: string; siteType: string; endDate: Date | string | null };
   },
   phase: "mark" | "followup",
@@ -137,7 +138,9 @@ async function buildSendPayload(
     replyToBuyer: content.replyToBuyer,
     includeMarkButtons: content.includeMarkButtons,
     phase,
+    /** 仅第一封提醒邮件带 AI 摘要与中文译文；第二封不附 */
     aiQualityHint: phase === "mark" ? (inquiry.aiSummaryZh || "").trim() : "",
+    aiMessageZh: phase === "mark" ? (inquiry.aiMessageZh || "").trim() : "",
   };
 }
 

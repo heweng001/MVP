@@ -308,6 +308,8 @@ model Inquiry {
   aiReasonsJson   String    @default("[]")
   /// 一句话中文摘要（列表悬停/邮件共用）
   aiSummaryZh     String    @default("")
+  /// DeepSeek 将询盘正文译成的简体中文（第一封邮件/后台展示；第二封不附）
+  aiMessageZh     String    @default("")
   aiAnalyzedAt    DateTime?
   aiError         String    @default("")
   createdAt       DateTime  @default(now())

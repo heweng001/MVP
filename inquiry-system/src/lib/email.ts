@@ -76,6 +76,8 @@ export type InquiryMailPayload = {
   phase?: "mark" | "followup";
   /** DeepSeek 询盘质量一句摘要（仅第一封；空则不展示） */
   aiQualityHint?: string;
+  /** DeepSeek 询盘正文中文译文（仅第一封；空则不展示） */
+  aiMessageZh?: string;
 };
 
 function parseList(s: string) {
@@ -166,11 +168,28 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     : "";
 
   const aiHint = (payload.aiQualityHint || "").trim();
-  const aiBlockHtml = aiHint
+  const aiZh = (payload.aiMessageZh || "").trim();
+  const aiParts: string[] = [];
+  if (aiHint) {
+    aiParts.push(
+      `<p style="margin:0 0 6px;font-size:13px;color:#334155;"><strong>AI 参考（DeepSeek）</strong>：${escapeHtml(aiHint)}</p>`,
+    );
+  }
+  if (aiZh) {
+    aiParts.push(
+      `<p style="margin:${aiHint ? "10px" : "0"} 0 4px;font-size:12px;color:#64748b;"><strong>中文译文（DeepSeek）</strong></p>`,
+      `<p style="margin:0;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.55;">${escapeHtml(aiZh)}</p>`,
+    );
+  }
+  if (aiHint || aiZh) {
+    aiParts.push(
+      `<p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;">以上由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。</p>`,
+    );
+  }
+  const aiBlockHtml = aiParts.length
     ? `
     <div style="margin-top:16px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
-      <p style="margin:0 0 6px;font-size:13px;color:#334155;"><strong>AI 参考（DeepSeek）</strong>：${escapeHtml(aiHint)}</p>
-      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">本结论由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准，并使用下方按钮标记有效/无效。</p>
+      ${aiParts.join("\n      ")}
     </div>`
     : "";
 
@@ -219,11 +238,15 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ...renderFieldRowsText(extra),
     ...(attachNotes.length ? ["", `部分附件未能加入邮件：${attachNotes.join("；")}`] : []),
   ];
-  if (aiHint) {
+  if (aiHint || aiZh) {
+    textParts.push("");
+    if (aiHint) textParts.push(`AI 参考（DeepSeek）：${aiHint}`);
+    if (aiZh) {
+      textParts.push("中文译文（DeepSeek）：");
+      textParts.push(aiZh);
+    }
     textParts.push(
-      "",
-      `AI 参考（DeepSeek）：${aiHint}`,
-      "本结论由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准，并使用下方按钮标记有效/无效。",
+      `以上由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。`,
     );
   }
   if (includeMark) {
