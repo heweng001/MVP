@@ -65,6 +65,167 @@ export const DEFAULT_KEYWORD_CATEGORIES: KeywordCategory[] = [
   { name: "其他", items: [] },
 ];
 
+/** 拓展词写入的固定类名（生成时覆盖该类） */
+export const EXPANDED_KEYWORD_CATEGORY = "拓展词";
+
+/** 默认 B 端修饰词（每次生成可改） */
+export const DEFAULT_B2B_MODIFIERS = [
+  "wholesale",
+  "custom",
+  "oem",
+  "factory",
+  "manufacturer",
+];
+
+/** 单次生成软上限（超出需用户确认） */
+export const EXPAND_SOFT_LIMIT = 500;
+
+/** 英文空格分词；连字符整段算 1 token */
+export function countEnglishWords(phrase: string): number {
+  const t = String(phrase || "").trim().replace(/\s+/g, " ");
+  if (!t) return 0;
+  return t.split(" ").filter(Boolean).length;
+}
+
+/** 仅拓展「看起来是英文短语」的行（跳过中文等） */
+export function isEnglishKeywordSeed(phrase: string): boolean {
+  const t = String(phrase || "").trim();
+  if (!t) return false;
+  // 允许字母、数字、空格、连字符、撇号、点（型号）
+  if (!/^[A-Za-z0-9][A-Za-z0-9\s.'.\-]*$/.test(t)) return false;
+  // 至少含一个字母
+  if (!/[A-Za-z]/.test(t)) return false;
+  const n = countEnglishWords(t);
+  return n >= 1 && n <= 3;
+}
+
+export function parseModifierList(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of String(raw || "").split(/[\n,，;；]+/)) {
+    const t = line.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
+/** 从各类收集可拓展种子（排除「拓展词」类） */
+export function collectExpandSeeds(categories: KeywordCategory[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of categories) {
+    if (String(c.name || "").trim() === EXPANDED_KEYWORD_CATEGORY) continue;
+    for (const item of c.items || []) {
+      const t = String(item).trim().replace(/\s+/g, " ");
+      if (!isEnglishKeywordSeed(t)) continue;
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+export type ExpandKeywordsOptions = {
+  modifiers: string[];
+  /** 默认 true */
+  prefix?: boolean;
+  /** 默认 true */
+  suffix?: boolean;
+};
+
+/**
+ * 生成拓展词：每个种子 × 每个 B 词 → 可选前缀/后缀。
+ * 种子已含该 B 词时跳过对应组合，避免 oem oem valve。
+ */
+export function buildExpandedKeywords(
+  seeds: string[],
+  opts: ExpandKeywordsOptions,
+): { items: string[]; skipped: number } {
+  const modifiers = (opts.modifiers || [])
+    .map((m) => String(m).trim())
+    .filter(Boolean);
+  const doPrefix = opts.prefix !== false;
+  const doSuffix = opts.suffix !== false;
+  const seen = new Set<string>();
+  const items: string[] = [];
+  let skipped = 0;
+
+  for (const seed of seeds) {
+    const seedNorm = seed.trim().replace(/\s+/g, " ");
+    if (!seedNorm) continue;
+    const seedLower = seedNorm.toLowerCase();
+    const seedTokens = new Set(seedLower.split(" "));
+
+    for (const mod of modifiers) {
+      const m = mod.trim();
+      if (!m) continue;
+      const mLower = m.toLowerCase();
+      if (seedTokens.has(mLower) || seedLower === mLower) {
+        skipped++;
+        continue;
+      }
+      if (doPrefix) {
+        const phrase = `${m} ${seedNorm}`.replace(/\s+/g, " ").trim();
+        const key = phrase.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(phrase);
+        }
+      }
+      if (doSuffix) {
+        const phrase = `${seedNorm} ${m}`.replace(/\s+/g, " ").trim();
+        const key = phrase.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(phrase);
+        }
+      }
+    }
+  }
+  return { items, skipped };
+}
+
+/** 预估条数（不考虑「种子已含 B 词」跳过） */
+export function estimateExpandedCount(
+  seedCount: number,
+  modifierCount: number,
+  opts?: { prefix?: boolean; suffix?: boolean },
+) {
+  const doPrefix = opts?.prefix !== false;
+  const doSuffix = opts?.suffix !== false;
+  const per = (doPrefix ? 1 : 0) + (doSuffix ? 1 : 0);
+  return Math.max(0, seedCount) * Math.max(0, modifierCount) * per;
+}
+
+/**
+ * 将拓展结果写入「拓展词」类（覆盖该类；其它类不动）。
+ * 若尚无该类则追加。
+ */
+export function applyExpandedCategory(
+  categories: KeywordCategory[],
+  expandedItems: string[],
+): KeywordCategory[] {
+  const next = categories.map((c) => ({
+    name: c.name,
+    items: [...(c.items || [])],
+  }));
+  const idx = next.findIndex(
+    (c) => String(c.name || "").trim() === EXPANDED_KEYWORD_CATEGORY,
+  );
+  if (idx >= 0) {
+    next[idx] = { name: EXPANDED_KEYWORD_CATEGORY, items: expandedItems };
+  } else {
+    next.push({ name: EXPANDED_KEYWORD_CATEGORY, items: expandedItems });
+  }
+  return next;
+}
+
 function looksLikeCategoriesJson(raw: string): boolean {
   const t = String(raw || "").trim();
   if (!t.startsWith("[")) return false;

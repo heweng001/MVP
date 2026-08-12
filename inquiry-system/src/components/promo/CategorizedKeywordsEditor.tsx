@@ -1,16 +1,20 @@
 "use client";
 
 import { KeywordsLineEditor } from "@/components/promo/KeywordsLineEditor";
+import { ExpandKeywordsButton } from "@/components/promo/ExpandKeywordsButton";
 import type { KeywordCategory } from "@/lib/promo";
 
 export function CategorizedKeywordsEditor({
   categories,
   onChange,
   minHeightPerCategory = 160,
+  showExpand = true,
 }: {
   categories: KeywordCategory[];
   onChange: (next: KeywordCategory[]) => void;
   minHeightPerCategory?: number;
+  /** 是否显示「生成拓展词」（默认开） */
+  showExpand?: boolean;
 }) {
   function updateAt(index: number, patch: Partial<KeywordCategory>) {
     onChange(
@@ -47,13 +51,18 @@ export function CategorizedKeywordsEditor({
           <span className="tabular-nums text-[var(--ink)]">{categories.length}</span> 类 ·{" "}
           <span className="tabular-nums text-[var(--ink)]">{total}</span> 词
         </span>
-        <button
-          type="button"
-          onClick={addCategory}
-          className="border border-[var(--line)] rounded-lg px-2.5 py-1 text-[12px] hover:bg-black/5"
-        >
-          + 添加分类
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {showExpand ? (
+            <ExpandKeywordsButton categories={categories} onApply={onChange} />
+          ) : null}
+          <button
+            type="button"
+            onClick={addCategory}
+            className="border border-[var(--line)] rounded-lg px-2.5 py-1 text-[12px] hover:bg-black/5"
+          >
+            + 添加分类
+          </button>
+        </div>
       </div>
 
       {categories.map((cat, index) => (
