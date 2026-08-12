@@ -47,12 +47,12 @@ export function ExpandKeywordsButton({
     }
     if (estimate > EXPAND_SOFT_LIMIT) {
       const ok = window.confirm(
-        `预计约生成 ${estimate} 条拓展词（超过建议上限 ${EXPAND_SOFT_LIMIT}）。\n仍要继续？将覆盖「${EXPANDED_KEYWORD_CATEGORY}」类现有内容。`,
+        `预计约生成 ${estimate} 条拓展词（超过建议上限 ${EXPAND_SOFT_LIMIT}）。\n仍要继续？将去重合并进「${EXPANDED_KEYWORD_CATEGORY}」，不删除已有词。`,
       );
       if (!ok) return;
     } else {
       const ok = window.confirm(
-        `将用当前 B 端词生成拓展词，并覆盖「${EXPANDED_KEYWORD_CATEGORY}」类。\n种子 ${seeds.length} 个 · B 端词 ${modifiers.length} 个 · 预计约 ${estimate} 条。\n确认生成？`,
+        `将用当前 B 端词生成拓展词，并去重合并进「${EXPANDED_KEYWORD_CATEGORY}」。\n种子 ${seeds.length} 个 · B 端词 ${modifiers.length} 个 · 预计约 ${estimate} 条。\n确认生成？`,
       );
       if (!ok) return;
     }
@@ -62,11 +62,14 @@ export function ExpandKeywordsButton({
       prefix,
       suffix,
     });
-    const next = applyExpandedCategory(categories, items);
+    const { categories: next, added, total } = applyExpandedCategory(
+      categories,
+      items,
+    );
     onApply(next);
     setOpen(false);
     window.alert(
-      `已写入「${EXPANDED_KEYWORD_CATEGORY}」：${items.length} 条` +
+      `已合并进「${EXPANDED_KEYWORD_CATEGORY}」：新增 ${added} 条，现共 ${total} 条` +
         (skipped ? `（跳过 ${skipped} 组：种子已含对应 B 端词）` : ""),
     );
   }
@@ -88,7 +91,7 @@ export function ExpandKeywordsButton({
               <h2 className="text-lg font-semibold">生成拓展词</h2>
               <p className="text-xs text-[var(--muted)] mt-1 leading-relaxed">
                 从除「{EXPANDED_KEYWORD_CATEGORY}」外的类中，选取 1～3 个英文单词的种子，与 B
-                端词组合生成前缀/后缀短语，写入并覆盖「{EXPANDED_KEYWORD_CATEGORY}」类。
+                端词组合生成前缀/后缀短语，去重合并进「{EXPANDED_KEYWORD_CATEGORY}」类（保留已有词）。
               </p>
             </div>
 
@@ -150,7 +153,7 @@ export function ExpandKeywordsButton({
                 onClick={generate}
                 className="bg-[var(--brand)] text-white rounded-lg px-3 py-1.5 text-sm"
               >
-                生成并覆盖「{EXPANDED_KEYWORD_CATEGORY}」
+                生成并合并进「{EXPANDED_KEYWORD_CATEGORY}」
               </button>
             </div>
           </div>

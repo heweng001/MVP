@@ -204,13 +204,13 @@ export function estimateExpandedCount(
 }
 
 /**
- * 将拓展结果写入「拓展词」类（覆盖该类；其它类不动）。
- * 若尚无该类则追加。
+ * 将拓展结果合并进「拓展词」类（去重追加；其它类不动）。
+ * 若尚无该类则新建。返回更新后的分类及本次新增条数。
  */
 export function applyExpandedCategory(
   categories: KeywordCategory[],
   expandedItems: string[],
-): KeywordCategory[] {
+): { categories: KeywordCategory[]; added: number; total: number } {
   const next = categories.map((c) => ({
     name: c.name,
     items: [...(c.items || [])],
@@ -218,12 +218,33 @@ export function applyExpandedCategory(
   const idx = next.findIndex(
     (c) => String(c.name || "").trim() === EXPANDED_KEYWORD_CATEGORY,
   );
-  if (idx >= 0) {
-    next[idx] = { name: EXPANDED_KEYWORD_CATEGORY, items: expandedItems };
-  } else {
-    next.push({ name: EXPANDED_KEYWORD_CATEGORY, items: expandedItems });
+  const existing = idx >= 0 ? next[idx].items : [];
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const item of existing) {
+    const t = String(item).trim().replace(/\s+/g, " ");
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(t);
   }
-  return next;
+  let added = 0;
+  for (const item of expandedItems) {
+    const t = String(item).trim().replace(/\s+/g, " ");
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(t);
+    added++;
+  }
+  if (idx >= 0) {
+    next[idx] = { name: EXPANDED_KEYWORD_CATEGORY, items: merged };
+  } else {
+    next.push({ name: EXPANDED_KEYWORD_CATEGORY, items: merged });
+  }
+  return { categories: next, added, total: merged.length };
 }
 
 function looksLikeCategoriesJson(raw: string): boolean {
