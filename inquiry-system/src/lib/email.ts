@@ -3,7 +3,13 @@ import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { appUrl } from "./constants";
 import { getSmtpConfig, isSmtpReady, type SmtpConfig } from "./settings";
-import type { MailFieldRow, MailFileAttachment } from "./inquiry-mail-fields";
+import {
+  redactBuyerEmails,
+  safeInquiryDisplayName,
+  scrubMarkMailFields,
+  type MailFieldRow,
+  type MailFileAttachment,
+} from "./inquiry-mail-fields";
 
 async function resolveIpv4Host(hostname: string) {
   const { address } = await dns.lookup(hostname, { family: 4 });
@@ -154,10 +160,22 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const invalidUrl = `${markBase}?a=invalid`;
   const includeMark = payload.includeMarkButtons !== false;
   const phase = payload.phase || "mark";
+  const isMark = phase !== "followup";
 
-  const extra = payload.extraFields || [];
-  const below = payload.belowFields || [];
+  // 第一封：主题/正文/AI 均不得出现买家邮箱（再 scrub 一层兜底）
+  const extra = isMark
+    ? scrubMarkMailFields(payload.extraFields || [], payload.email)
+    : payload.extraFields || [];
+  const below = isMark
+    ? scrubMarkMailFields(payload.belowFields || [], payload.email)
+    : payload.belowFields || [];
   const files = payload.fileAttachments || [];
+  const aiQualityHint = isMark
+    ? redactBuyerEmails(payload.aiQualityHint || "", payload.email)
+    : payload.aiQualityHint || "";
+  const aiMessageZh = isMark
+    ? redactBuyerEmails(payload.aiMessageZh || "", payload.email)
+    : payload.aiMessageZh || "";
 
   const extraRowsHtml = renderFieldRowsHtml(extra);
   const belowRowsHtml = below.length
@@ -173,8 +191,8 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
     ? `<div style="margin:12px 0 16px;">${hintHtml(payload.doNotReplyHint)}</div>`
     : "";
 
-  const aiHint = (payload.aiQualityHint || "").trim();
-  const aiZh = (payload.aiMessageZh || "").trim();
+  const aiHint = aiQualityHint.trim();
+  const aiZh = aiMessageZh.trim();
   const aiParts: string[] = [];
   if (aiHint) {
     aiParts.push(
@@ -289,15 +307,17 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   }
 
   const fromAddr = cfg.from || cfg.user || "noreply@example.com";
+  const safeName = safeInquiryDisplayName(payload.name);
+  // 第一封禁止主题出现买家邮箱；第二封才允许 name/email 回退
   const subject =
     phase === "followup"
-      ? `Inquiry from ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`
-      : `[询盘提醒] ${payload.siteName} - ${payload.name || payload.email || "新询盘"}`;
+      ? `Inquiry from ${payload.siteName} - ${safeName || payload.email || "新询盘"}`
+      : `[询盘提醒] ${payload.siteName} - ${safeName || "新询盘"}`;
   await transport.sendMail({
     from: fromAddr,
     to: payload.to.join(", "),
     cc: payload.cc?.length ? payload.cc.join(", ") : undefined,
-    replyTo: payload.replyToBuyer ? payload.email || undefined : undefined,
+    replyTo: !isMark && payload.replyToBuyer ? payload.email || undefined : undefined,
     subject,
     text,
     html,

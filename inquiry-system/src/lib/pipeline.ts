@@ -7,6 +7,7 @@ import { parseEmails, sendInquiryEmail } from "./email";
 import {
   buildFollowupMailContent,
   buildInquiryMailContent,
+  redactBuyerEmails,
   resolveInquiryName,
 } from "./inquiry-mail-fields";
 import { mailContentGate } from "./mail-content-gate";
@@ -138,9 +139,15 @@ async function buildSendPayload(
     replyToBuyer: content.replyToBuyer,
     includeMarkButtons: content.includeMarkButtons,
     phase,
-    /** 仅第一封提醒邮件带 AI 摘要与中文译文；第二封不附 */
-    aiQualityHint: phase === "mark" ? (inquiry.aiSummaryZh || "").trim() : "",
-    aiMessageZh: phase === "mark" ? (inquiry.aiMessageZh || "").trim() : "",
+    /** 仅第一封提醒邮件带 AI 摘要与中文译文；第二封不附；第一封脱敏邮箱 */
+    aiQualityHint:
+      phase === "mark"
+        ? redactBuyerEmails((inquiry.aiSummaryZh || "").trim(), inquiry.email)
+        : "",
+    aiMessageZh:
+      phase === "mark"
+        ? redactBuyerEmails((inquiry.aiMessageZh || "").trim(), inquiry.email)
+        : "",
   };
 }
 

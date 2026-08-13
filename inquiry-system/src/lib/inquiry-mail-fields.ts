@@ -150,6 +150,64 @@ function isEmailFieldRow(f: MailFieldRow, storedEmail: string) {
   return false;
 }
 
+/** 整段值是否像邮箱（用于姓名降级、主题禁邮箱） */
+export function looksLikeEmail(value: string): boolean {
+  const t = String(value || "").trim();
+  if (!t.includes("@")) return false;
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(t);
+}
+
+/** 主题/展示用姓名：空或整段为邮箱时视为无姓名 */
+export function safeInquiryDisplayName(name: string): string {
+  const t = String(name || "").trim();
+  if (!t || looksLikeEmail(t)) return "";
+  return t;
+}
+
+const EMAIL_IN_TEXT_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/** 正文脱敏：已知买家邮箱 + 任意邮箱形态 → [已隐藏] */
+export function redactBuyerEmails(text: string, knownEmail = ""): string {
+  let s = String(text ?? "");
+  const known = String(knownEmail || "").trim();
+  if (known) {
+    const escaped = known.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    s = s.replace(new RegExp(escaped, "gi"), "[已隐藏]");
+  }
+  return s.replace(EMAIL_IN_TEXT_RE, "[已隐藏]");
+}
+
+function isNameFieldRow(f: MailFieldRow) {
+  if (f.id === "name" || f.id === "smart-name") return true;
+  return labelLooksLikeName(f.label);
+}
+
+/**
+ * 第一封邮件字段清洗：去掉邮箱字段/整段邮箱姓名，并脱敏正文中的邮箱。
+ * hint 类提示文案不改写。
+ */
+export function scrubMarkMailFields(
+  rows: MailFieldRow[],
+  buyerEmail: string,
+): MailFieldRow[] {
+  const out: MailFieldRow[] = [];
+  for (const f of rows) {
+    if (isEmailFieldRow(f, buyerEmail)) continue;
+    const raw = String(f.value ?? "").trim();
+    if (looksLikeEmail(raw)) continue;
+    if (isNameFieldRow(f) && looksLikeEmail(raw)) continue;
+    if (f.hint) {
+      out.push(f);
+      continue;
+    }
+    out.push({
+      ...f,
+      value: redactBuyerEmails(f.value, buyerEmail),
+    });
+  }
+  return out;
+}
+
 /** 到期站：留言类字段替换为续费提示 */
 export function applyExpiredMessageGate(fields: MailFieldRow[], storedMessage: string): MailFieldRow[] {
   const msg = storedMessage.trim();
@@ -429,14 +487,19 @@ export function buildInquiryMailContent(opts: {
 }): InquiryMailContent {
   const gate = mailContentGate(opts.site);
   const parts = collectInquiryFieldParts(baseOpts(opts));
-  const aboveNoEmail = parts.above.filter((f) => !isEmailFieldRow(f, opts.email));
+  const aboveScrubbed = scrubMarkMailFields(parts.above, opts.email);
+  const belowScrubbed = scrubMarkMailFields(parts.belowRaw, opts.email);
+  const messageScrubbed = redactBuyerEmails(opts.message, opts.email);
 
   if (gate.expired) {
     return {
       message: MAIL_TIPS.expiredMessage,
       messageHint: true,
-      extraAbove: applyExpiredMessageGate(aboveNoEmail, opts.message),
-      below: parts.belowRaw,
+      extraAbove: scrubMarkMailFields(
+        applyExpiredMessageGate(aboveScrubbed, opts.message),
+        opts.email,
+      ),
+      below: belowScrubbed,
       doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
       unlockHint: "",
       attachments: parts.attachments,
@@ -447,9 +510,9 @@ export function buildInquiryMailContent(opts: {
 
   if (gate.displayUpgrade) {
     return {
-      message: opts.message,
+      message: messageScrubbed,
       messageHint: false,
-      extraAbove: aboveNoEmail,
+      extraAbove: aboveScrubbed,
       below: displayGeoJourneyTips(),
       doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
       unlockHint: "",
@@ -461,10 +524,10 @@ export function buildInquiryMailContent(opts: {
 
   // SEO 服务期内：下方 geo/journey 真值
   return {
-    message: opts.message,
+    message: messageScrubbed,
     messageHint: false,
-    extraAbove: aboveNoEmail,
-    below: parts.belowRaw,
+    extraAbove: aboveScrubbed,
+    below: belowScrubbed,
     doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
     unlockHint: "",
     attachments: parts.attachments,
