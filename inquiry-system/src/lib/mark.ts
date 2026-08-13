@@ -77,9 +77,13 @@ export function getMarkCapabilities(inquiry: {
   const invalidExpired = isInvalidMarkExpired(inquiry.sentAt);
 
   let followupTip = "";
-  if (!gate.expired) {
-    if (isValid) followupTip = MAIL_TIPS.followupSentFeedback;
-    else if (unmarked) followupTip = MAIL_TIPS.markValidToGetFollowup;
+  if (gate.expired) {
+    // 到期站：反馈页统一提示需续费才能收第二封（不发第二封）
+    followupTip = MAIL_TIPS.expiredRenewFeedback;
+  } else if (isValid) {
+    followupTip = MAIL_TIPS.followupSentFeedback;
+  } else if (unmarked) {
+    followupTip = MAIL_TIPS.markValidToGetFollowup;
   }
 
   return {
@@ -89,9 +93,14 @@ export function getMarkCapabilities(inquiry: {
     canMarkInvalid: unmarked && !invalidExpired,
     canEditReason: isInvalid,
     invalidBlockedReason:
-      unmarked && invalidExpired ? INVALID_MARK_EXPIRED_TIP : "",
+      unmarked && invalidExpired
+        ? gate.expired
+          ? "发信已超过 72 小时，无法再标记为无效。你仍可将询盘标记为有效。"
+          : INVALID_MARK_EXPIRED_TIP
+        : "",
     unlockAvailable: !gate.expired && (unmarked || isInvalid),
-    showUnlockedDetails: gate.expired,
+    /** 到期站第一封已与到期前一致，反馈页不再铺「解锁详情」 */
+    showUnlockedDetails: false,
     followupTip,
   };
 }

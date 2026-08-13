@@ -12,8 +12,9 @@ export type MailContentGate = {
 export const MAIL_TIPS = {
   expiredMessage:
     "网站已经到期，请及时联系贸牛续费，以显示完整询盘内容。",
+  /** 反馈页：到期站不发第二封 */
   expiredRenewFeedback:
-    "网站已经到期，请及时联系贸牛续费。标记结果已记录，但不会再发送含买家邮箱的第二封邮件。",
+    "网站服务已到期。标记结果已记录，但不会发送含买家邮箱的第二封邮件；续费后即可恢复，请及时联系贸牛续费。",
   displayGeo:
     "升级成SEO型网站，即可查看询盘来源的国家和城市。",
   displayJourney:

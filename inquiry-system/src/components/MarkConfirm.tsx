@@ -99,7 +99,9 @@ export function MarkConfirm({
     }
     setOkMsg(
       action === "valid"
-        ? "已标记为有效，新邮件正在发送"
+        ? data.followupScheduled === false
+          ? "已标记为有效"
+          : "已标记为有效，新邮件正在发送"
         : "已标记为无效",
     );
   }
@@ -167,6 +169,11 @@ export function MarkConfirm({
           <p className="text-sm text-[var(--ink)]">请选择标记结果（点击后立即生效）：</p>
           {unlockAvailable && followTip ? (
             <p className="text-xs text-[var(--muted)] leading-relaxed">{followTip}</p>
+          ) : null}
+          {!unlockAvailable && !marked && followTip ? (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 leading-relaxed">
+              {followTip}
+            </p>
           ) : null}
           {invalidBlockedReason ? (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2">

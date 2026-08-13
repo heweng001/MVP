@@ -6,6 +6,7 @@ import {
   unlockedDetailFields,
   type MarkAction,
 } from "@/lib/mark";
+import { mailContentGate } from "@/lib/mail-content-gate";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest) {
   const detail = caps.showUnlockedDetails
     ? unlockedDetailFields(result.inquiry)
     : { fields: [], messageTip: "", followupTip: caps.followupTip };
+  const gate = mailContentGate(result.inquiry.site);
+  const followupScheduled = action === "valid" && !gate.expired;
+
   return NextResponse.json({
     ok: true,
     status: result.inquiry.status,
@@ -53,5 +57,6 @@ export async function POST(req: NextRequest) {
     messageTip: detail.messageTip,
     followupTip: detail.followupTip || caps.followupTip,
     followupError: "followupError" in result ? result.followupError || "" : "",
+    followupScheduled,
   });
 }

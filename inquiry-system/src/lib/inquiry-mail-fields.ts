@@ -7,6 +7,7 @@ import {
 } from "./wp-fields";
 import { MAIL_TIPS, mailContentGate } from "./mail-content-gate";
 import { formatUserJourneyHtml } from "./user-journey";
+import { SITE_TYPES } from "./labels";
 
 export type MailFieldRow = {
   id: string;
@@ -475,7 +476,10 @@ function baseOpts(opts: {
   };
 }
 
-/** 第一封：标记邮件（藏邮箱；下方仅 geo/journey） */
+/** 第一封：标记邮件（藏邮箱；下方仅 geo/journey）
+ * 到期站正文与到期前一致（展示型仍为升级提示，SEO 型仍为真实 geo/journey）；
+ * 是否发第二封由 mark/pipeline 按到期状态决定。
+ */
 export function buildInquiryMailContent(opts: {
   site: { siteType: string; endDate: Date | string | null };
   rawPayload: string | null | undefined;
@@ -485,30 +489,13 @@ export function buildInquiryMailContent(opts: {
   message: string;
   pageUrl: string;
 }): InquiryMailContent {
-  const gate = mailContentGate(opts.site);
   const parts = collectInquiryFieldParts(baseOpts(opts));
   const aboveScrubbed = scrubMarkMailFields(parts.above, opts.email);
   const belowScrubbed = scrubMarkMailFields(parts.belowRaw, opts.email);
   const messageScrubbed = redactBuyerEmails(opts.message, opts.email);
+  const isSeo = opts.site.siteType === SITE_TYPES[0];
 
-  if (gate.expired) {
-    return {
-      message: MAIL_TIPS.expiredMessage,
-      messageHint: true,
-      extraAbove: scrubMarkMailFields(
-        applyExpiredMessageGate(aboveScrubbed, opts.message),
-        opts.email,
-      ),
-      below: belowScrubbed,
-      doNotReplyHint: MAIL_TIPS.doNotReplyFirstMail,
-      unlockHint: "",
-      attachments: parts.attachments,
-      replyToBuyer: false,
-      includeMarkButtons: true,
-    };
-  }
-
-  if (gate.displayUpgrade) {
+  if (!isSeo) {
     return {
       message: messageScrubbed,
       messageHint: false,
@@ -522,7 +509,6 @@ export function buildInquiryMailContent(opts: {
     };
   }
 
-  // SEO 服务期内：下方 geo/journey 真值
   return {
     message: messageScrubbed,
     messageHint: false,
@@ -572,14 +558,14 @@ export function buildFeedbackDetailFields(opts: {
   pageUrl: string;
 }): { fields: MailFieldRow[]; messageTip: string; followupTip: string } {
   const gate = mailContentGate(opts.site);
-  const parts = collectInquiryFieldParts(baseOpts(opts));
   const isValid = opts.status === "valid";
 
+  // 到期站：不铺询盘详情（第一封已与到期前一致），仅提示续费后才能收第二封
   if (gate.expired) {
     return {
-      messageTip: MAIL_TIPS.expiredRenewFeedback,
-      followupTip: "",
-      fields: applyExpiredMessageGate([...parts.above, ...parts.belowRaw], opts.message),
+      messageTip: "",
+      followupTip: MAIL_TIPS.expiredRenewFeedback,
+      fields: [],
     };
   }
 
