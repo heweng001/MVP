@@ -8,9 +8,9 @@ export type SiteMonthStat = {
   total: number;
   /** 系统自动垃圾 */
   autoSpam: number;
-  /** 审核垃圾 */
+  /** 历史审核垃圾（旧流程） */
   reviewSpam: number;
-  /** 拦截 = 自动垃圾 + 审核垃圾（列表「拦截」列） */
+  /** 拦截 = DeepSeek 自动垃圾 + 历史审核垃圾（列表「拦截」列） */
   intercepted: number;
   forwarded: number;
   valid: number;
@@ -155,10 +155,10 @@ export async function siteMonthStats(
 export function funnelLayers(s: SiteMonthStat) {
   const submitted = s.total;
   const unmarked = s.pending;
-  // 自动拦截后剩 = 提交 − 自动垃圾（审核垃圾在后续「未转发」中体现）
-  const afterAutoRemain = Math.max(0, submitted - s.autoSpam);
-  const reviewRemoved = Math.max(0, afterAutoRemain - s.forwarded);
-  const afterReviewRemain = Math.max(0, afterAutoRemain - reviewRemoved);
+  // DeepSeek 拦截后剩 = 提交 − 自动垃圾（历史审核垃圾等计入后续「未转发」）
+  const afterAiRemain = Math.max(0, submitted - s.autoSpam);
+  const notForwarded = Math.max(0, afterAiRemain - s.forwarded);
+  const forwardedRemain = Math.max(0, afterAiRemain - notForwarded);
   const pendingPlusValid = unmarked + s.valid;
   const markedValid = s.valid;
 
@@ -173,18 +173,18 @@ export function funnelLayers(s: SiteMonthStat) {
     },
     {
       key: "after_auto",
-      label: "自动拦截后剩",
-      hint: "本月提交 − 自动垃圾",
-      value: afterAutoRemain,
+      label: "DeepSeek 拦截后剩",
+      hint: "本月提交 − DeepSeek 判定为自动垃圾",
+      value: afterAiRemain,
       removed: s.autoSpam,
       removedLabel: "自动垃圾",
     },
     {
       key: "after_review",
-      label: "人工审核后剩",
-      hint: "自动拦截后剩 − 未转发（待审核、审核垃圾等）",
-      value: afterReviewRemain,
-      removed: reviewRemoved,
+      label: "已转发",
+      hint: "DeepSeek 拦截后剩 − 未转发（含历史审核垃圾等未发给客户的询盘）",
+      value: forwardedRemain,
+      removed: notForwarded,
       removedLabel: "未转发",
     },
     {
