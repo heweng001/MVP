@@ -1,8 +1,6 @@
 import { randomBytes } from "crypto";
 import { prisma } from "./prisma";
 import { InquiryStatus } from "./constants";
-import { scoreSpam } from "./spam";
-import { getSpamRoutingConfig } from "./settings";
 import { parseEmails, sendInquiryEmail } from "./email";
 import {
   buildFollowupMailContent,
@@ -32,23 +30,6 @@ export type IngestBody = {
 
 function token() {
   return randomBytes(24).toString("hex");
-}
-
-async function isBlacklisted(siteId: string, email: string, message: string) {
-  const domain = email.includes("@") ? email.split("@")[1].toLowerCase() : "";
-  const entries = await prisma.blacklistEntry.findMany({
-    where: {
-      OR: [{ siteId: null }, { siteId }],
-    },
-  });
-  const lowerMsg = message.toLowerCase();
-  for (const e of entries) {
-    const v = e.value.toLowerCase();
-    if (e.type === "email" && email.toLowerCase() === v) return true;
-    if (e.type === "domain" && domain && domain === v) return true;
-    if (e.type === "url" && lowerMsg.includes(v)) return true;
-  }
-  return false;
 }
 
 export async function resolveRecipients(siteId: string, formId: string) {
@@ -306,49 +287,13 @@ export async function ingestInquiry(body: IngestBody) {
   const message = String(body.message ?? "");
   const pageUrl = String(body.page_url ?? "");
 
-  let spam;
-  let degraded = false;
-  try {
-    const blacklisted = await isBlacklisted(site.id, email, message);
-    spam = scoreSpam({
-      name,
-      email,
-      phone,
-      subject,
-      message,
-      pageUrl,
-      productKeywords: site.productKeywords,
-      spamExtraWords: site.spamExtraWords,
-      blacklisted,
-    });
-  } catch (e) {
-    console.error("[ingest] spam scoring failed, degrade", e);
-    spam = { score: 0, hits: ["评分失败，已降级放行"] };
-    degraded = true;
-  }
-
-  const routing = await getSpamRoutingConfig();
-  const threshold = routing.autoSpamMin;
-  const midLow = routing.reviewMin;
-
-  let status: string = InquiryStatus.PENDING;
-  let reviewEnteredAt: Date | null = null;
-
-  if (!degraded && spam.score >= threshold) {
-    status = InquiryStatus.AUTO_SPAM;
-  } else if (!degraded && spam.score >= midLow) {
-    status = InquiryStatus.REVIEW;
-    reviewEnteredAt = new Date();
-  } else {
-    status = InquiryStatus.PENDING;
-  }
-
+  // 先入库为 pending；DeepSeek 判定后再分流（失败则放行发信）
   const inquiry = await prisma.inquiry.create({
     data: {
       siteId: site.id,
       formId,
       entryId,
-      status,
+      status: InquiryStatus.PENDING,
       name,
       email,
       phone,
@@ -362,40 +307,53 @@ export async function ingestInquiry(body: IngestBody) {
         location: body.location ?? null,
         user_journey: body.user_journey ?? null,
       }),
-      spamScore: spam.score,
-      spamHits: JSON.stringify(spam.hits),
+      spamScore: 0,
+      spamHits: "[]",
       markToken: token(),
-      reviewEnteredAt,
-      degraded,
+      reviewEnteredAt: null,
+      degraded: false,
       submittedAt: new Date(),
     },
     include: { site: true },
   });
 
-  if (status === InquiryStatus.PENDING) {
-    // 发信前短超时同步分析，便于邮件带上 AI 摘要；失败不影响路由与发信
-    await runInquiryAiAnalysis(inquiry.id);
+  const ai = await runInquiryAiAnalysis(inquiry.id, { timeoutMs: 12000 });
+  const isAiSpam = ai?.isSpam === true;
+
+  if (isAiSpam) {
+    await prisma.inquiry.update({
+      where: { id: inquiry.id },
+      data: {
+        status: InquiryStatus.AUTO_SPAM,
+        spamHits: JSON.stringify(ai?.reasons?.length ? ai.reasons : ["DeepSeek 判定为垃圾"]),
+      },
+    });
+  } else {
+    // ham 或 AI 失败：直发（失败放行）
+    const degraded = !ai;
+    if (degraded) {
+      await prisma.inquiry.update({
+        where: { id: inquiry.id },
+        data: {
+          degraded: true,
+          notes: "DeepSeek 判定失败，已降级放行发信",
+        },
+      });
+    }
     try {
       await sendInquiryById(inquiry.id, { degraded });
     } catch (e) {
       console.error("[ingest] send failed, keep pending without sentAt", e);
-      // Try degrade: still mark as needing attention
       await prisma.inquiry.update({
         where: { id: inquiry.id },
         data: { degraded: true, notes: `发信失败: ${String(e)}` },
       });
-      // Retry once is enough for MVP; cron won't resend pending without sentAt - add note
       try {
         await sendInquiryById(inquiry.id, { degraded: true });
       } catch (e2) {
         console.error("[ingest] retry send failed", e2);
       }
     }
-  } else {
-    // 不改路由；列表旁路异步补全（不等待）
-    void runInquiryAiAnalysis(inquiry.id).catch((e) =>
-      console.error("[ingest] async inquiry-ai failed", inquiry.id, e),
-    );
   }
 
   const fresh = await prisma.inquiry.findUniqueOrThrow({ where: { id: inquiry.id } });
@@ -403,8 +361,8 @@ export async function ingestInquiry(body: IngestBody) {
 }
 
 /**
- * 每日中午批量：把当前全部「待审核」发给客户。
- * 顺带把历史 timeout_unmarked 归一为 pending（一次性数据清理）。
+ * 兼容旧 cron：处理存量「待审核」——用 DeepSeek 重判后分流（不再无条件批量放行）。
+ * 顺带把历史 timeout_unmarked 归一为 pending。
  */
 export async function processReviewDailyFlush() {
   const legacy = await prisma.inquiry.updateMany({
@@ -417,14 +375,27 @@ export async function processReviewDailyFlush() {
     orderBy: { reviewEnteredAt: "asc" },
   });
   let sent = 0;
+  let spam = 0;
   const errors: string[] = [];
   for (const item of due) {
     try {
-      await sendInquiryById(item.id, { autoSentReview: true });
+      const ai = await runInquiryAiAnalysis(item.id, { force: true, timeoutMs: 12000 });
+      if (ai?.isSpam) {
+        await prisma.inquiry.update({
+          where: { id: item.id },
+          data: {
+            status: InquiryStatus.AUTO_SPAM,
+            spamHits: JSON.stringify(ai.reasons?.length ? ai.reasons : ["DeepSeek 判定为垃圾"]),
+          },
+        });
+        spam++;
+        continue;
+      }
+      await sendInquiryById(item.id, { autoSentReview: true, setPending: true });
       sent++;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[cron] review daily flush send failed", item.id, e);
+      console.error("[cron] legacy review migrate failed", item.id, e);
       errors.push(`${item.id}: ${msg}`);
     }
   }
@@ -432,6 +403,7 @@ export async function processReviewDailyFlush() {
     legacyTimeoutUnmarkedFixed: legacy.count,
     processed: due.length,
     sent,
+    spam,
     errors,
   };
 }

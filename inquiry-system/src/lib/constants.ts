@@ -25,22 +25,22 @@ export function isSpamStatus(status: string) {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  review: "待审核",
+  review: "待审核(历史)",
   pending: "待标记",
   valid: "有效",
   invalid: "无效",
   timeout_unmarked: "超时未标记",
   auto_spam: "自动垃圾",
-  review_spam: "审核垃圾",
+  review_spam: "审核垃圾(历史)",
 };
 
 /** 询盘状态 / 列表页签悬停说明 */
 export const STATUS_HINTS: Record<string, string> = {
   all: "显示当前筛选条件下的所有询盘。",
-  review: "垃圾分达到人工审核阈值且未达自动拦截阈值，可审核通过（发给客户）或标为垃圾（不发给客户）；每天中午 12:00 仍待审核的将自动发给客户。",
-  spam: "未发给客户的垃圾询盘：含系统自动判定的「自动垃圾」，以及管理员标为垃圾的「审核垃圾」。",
-  auto_spam: "系统按垃圾分自动判定为明显垃圾，未发给客户；可补发。",
-  review_spam: "管理员在待审核中标为垃圾，或对未转发询盘手动标为垃圾。",
+  review: "历史状态：旧版人工审核队列。新询盘不再进入此状态；存量会由 cron 按 DeepSeek 重判迁移。",
+  spam: "未发给客户的垃圾询盘：含 DeepSeek 自动判定的「自动垃圾」，以及历史「审核垃圾」。",
+  auto_spam: "DeepSeek 判定为垃圾，未发给客户；可补发。",
+  review_spam: "历史：管理员标为垃圾的询盘。",
   forwarded: "已成功发给客户的询盘（含待标记、有效、无效）。",
   pending: "已转发且等待客户点有效/无效。发信超过 72 小时后不可再标无效，仍可标有效。",
   timeout_unmarked: "已废弃的历史状态，系统会归一为待标记。",

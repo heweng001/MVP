@@ -1,4 +1,3 @@
-import { localizeCountryCodes } from "./countries";
 import { formatGeolocationZh, parseGeoSmartBlob } from "./places";
 import { formatUserJourneyHtml } from "./user-journey";
 
@@ -165,7 +164,7 @@ export function extractHiddenFields(rawPayload: string | null | undefined): WpFo
     if (/entry_user_journey|entry_geolocation/i.test(f.label)) continue;
     others.push({
       ...f,
-      value: localizeCountryCodes(cleaned),
+      value: cleaned,
     });
   }
 

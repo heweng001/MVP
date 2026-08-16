@@ -135,9 +135,7 @@ export function InquiryListBoard({
     router.refresh();
   }
 
-  const isReviewTab = tab === "review";
-
-  const colSpan = (showStatusColumn ? 8 : 7) + 1 + 3;
+  const colSpan = (showStatusColumn ? 7 : 6) + 1 + 3;
 
   return (
     <div className="space-y-3">
@@ -209,61 +207,38 @@ export function InquiryListBoard({
 
       <div className="flex flex-wrap items-center gap-1.5 text-xs bg-white border border-[var(--line)] rounded-lg px-2.5 py-2">
         <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
-        {isReviewTab ? (
-          <>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("approve_review")}
-              className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量审核通过
-            </button>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("reject_review")}
-              className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量标为垃圾
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("resend")}
-              className="border border-[var(--line)] rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量补发
-            </button>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("valid")}
-              className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量有效
-            </button>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("invalid")}
-              className="bg-[var(--warn)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量无效
-            </button>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => batch("auto_spam")}
-              className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
-            >
-              批量垃圾
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          disabled={busy || selected.size === 0}
+          onClick={() => batch("resend")}
+          className="border border-[var(--line)] rounded px-2 py-0.5 disabled:opacity-40"
+        >
+          批量补发
+        </button>
+        <button
+          type="button"
+          disabled={busy || selected.size === 0}
+          onClick={() => batch("valid")}
+          className="bg-[var(--brand)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+        >
+          批量有效
+        </button>
+        <button
+          type="button"
+          disabled={busy || selected.size === 0}
+          onClick={() => batch("invalid")}
+          className="bg-[var(--warn)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+        >
+          批量无效
+        </button>
+        <button
+          type="button"
+          disabled={busy || selected.size === 0}
+          onClick={() => batch("auto_spam")}
+          className="bg-[var(--danger)] text-white rounded px-2 py-0.5 disabled:opacity-40"
+        >
+          批量垃圾
+        </button>
         <button
           type="button"
           disabled={busy || selected.size === 0}
@@ -290,10 +265,9 @@ export function InquiryListBoard({
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">时间</th>
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">网站</th>
               <th className="px-2 py-1.5 font-medium whitespace-nowrap">联系人</th>
-              <th className="px-2 py-1.5 font-medium whitespace-nowrap">分</th>
               <th
                 className="px-2 py-1.5 font-medium whitespace-nowrap"
-                title="DeepSeek 旁路判定，仅供参考，不影响拦截路由"
+                title="DeepSeek 系统判定，用于是否发给客户"
               >
                 AI判定
               </th>
@@ -360,19 +334,18 @@ export function InquiryListBoard({
                         {item.email || "—"}
                       </div>
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap">{item.spamScore}</td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       {item.aiSpamLabel === "spam" ? (
                         <span
                           className="text-rose-700"
-                          title={item.aiSummaryZh || "DeepSeek：疑似垃圾（仅供参考）"}
+                          title={item.aiSummaryZh || "DeepSeek：疑似垃圾"}
                         >
                           疑似垃圾
                         </span>
                       ) : item.aiSpamLabel === "ham" ? (
                         <span
                           className="text-emerald-700"
-                          title={item.aiSummaryZh || "DeepSeek：偏正常（仅供参考）"}
+                          title={item.aiSummaryZh || "DeepSeek：偏正常"}
                         >
                           偏正常
                         </span>

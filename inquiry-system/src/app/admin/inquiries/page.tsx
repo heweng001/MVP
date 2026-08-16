@@ -13,16 +13,10 @@ const TABS = [
     hint: "显示当前筛选条件下的所有询盘，包含下方各状态。",
   },
   {
-    key: "review",
-    label: "待审核",
-    status: InquiryStatus.REVIEW,
-    hint: "垃圾分达到人工审核阈值且未达自动拦截阈值。可「审核通过」（发给客户）或「标为垃圾」（状态变为审核垃圾、不发给客户）；支持批量。每天中午 12:00 仍待审核的将自动发给客户。阈值可在「发件设置」中配置。",
-  },
-  {
     key: "spam",
     label: "垃圾",
     status: "",
-    hint: "未发给客户的垃圾询盘：含系统自动判定的「自动垃圾」，以及管理员标为垃圾的「审核垃圾」。",
+    hint: "DeepSeek 判定为垃圾而未发给客户的询盘（含历史审核垃圾）；可补发。",
   },
   {
     key: "forwarded",
@@ -51,10 +45,11 @@ const TABS = [
 ] as const;
 
 function tabFromParam(tab: string | undefined, status: string | undefined) {
-  // 兼容旧「未标记 / 超时未标记」页签
+  // 兼容旧「未标记 / 超时未标记 / 待审核」页签
   if (tab === "unmarked" || tab === "timeout_unmarked") return "pending";
-  // 废弃状态，展示并入待标记
+  if (tab === "review") return "all";
   if (status === InquiryStatus.TIMEOUT_UNMARKED) return "pending";
+  if (status === InquiryStatus.REVIEW) return "all";
   if (tab === "auto_spam" || tab === "review_spam") return "spam";
   if (tab && TABS.some((t) => t.key === tab)) return tab;
   if (status === InquiryStatus.AUTO_SPAM || status === InquiryStatus.REVIEW_SPAM) {
@@ -150,10 +145,7 @@ export default async function InquiriesPage({
     }),
     prisma.inquiry.findMany({
       where: { ...baseWhere, ...extraWhere },
-      orderBy:
-        tab === "review"
-          ? [{ reviewEnteredAt: "asc" }, { submittedAt: "asc" }]
-          : { submittedAt: "desc" },
+      orderBy: { submittedAt: "desc" },
       take: 200,
       include: { site: { include: { client: true } } },
     }),

@@ -253,7 +253,9 @@ export const COUNTRY_ZH: Record<string, string> = {
   UK: "英国",
 };
 
-/** 将文本中的 ISO 国家简称替换为中文全称（如 ", CN" → ", 中国"） */
+/** 将文本中的 ISO 国家简称替换为中文全称（如 ", CN" → ", 中国"）。
+ * 仅应用于地理位置类字段，勿用于公司名/正文等（否则 PT 等会被误换成「葡萄牙」）。
+ */
 export function localizeCountryCodes(text: string): string {
   if (!text) return text;
   return text.replace(/\b([A-Z]{2})\b/g, (code) => COUNTRY_ZH[code] || code);

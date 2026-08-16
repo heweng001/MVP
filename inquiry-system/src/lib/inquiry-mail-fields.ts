@@ -350,7 +350,9 @@ export function collectInquiryFieldParts(opts: {
         {
           id: builtinProbe,
           label: f.label,
-          value: localizeCountryCodes(f.value),
+          // 仅地理位置做国家简称→中文；浏览路径与其它字段保持原文
+          value:
+            builtinProbe === "geo" ? localizeCountryCodes(f.value) : f.value,
           html: /<[a-z][\s\S]*>/i.test(f.value),
         },
         above,
@@ -365,7 +367,7 @@ export function collectInquiryFieldParts(opts: {
       {
         id: f.id,
         label: f.label,
-        value: localizeCountryCodes(f.value),
+        value: f.value,
         html: /<[a-z][\s\S]*>/i.test(f.value),
       },
       above,

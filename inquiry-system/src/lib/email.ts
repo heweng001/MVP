@@ -196,7 +196,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   const aiParts: string[] = [];
   if (aiHint) {
     aiParts.push(
-      `<p style="margin:0 0 6px;font-size:13px;color:#334155;"><strong>AI 参考（DeepSeek）</strong>：${escapeHtml(aiHint)}</p>`,
+      `<p style="margin:0 0 6px;font-size:13px;color:#334155;"><strong>质量判定（DeepSeek）</strong>：${escapeHtml(aiHint)}</p>`,
     );
   }
   if (aiZh) {
@@ -207,7 +207,7 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   }
   if (aiHint || aiZh) {
     aiParts.push(
-      `<p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;">以上由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。</p>`,
+      `<p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;">以上由 DeepSeek 自动判定与翻译；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。</p>`,
     );
   }
   const aiBlockHtml = aiParts.length
@@ -272,13 +272,13 @@ export async function sendInquiryEmail(payload: InquiryMailPayload) {
   ];
   if (aiHint || aiZh) {
     textParts.push("");
-    if (aiHint) textParts.push(`AI 参考（DeepSeek）：${aiHint}`);
+    if (aiHint) textParts.push(`质量判定（DeepSeek）：${aiHint}`);
     if (aiZh) {
       textParts.push("中文译文（DeepSeek）：");
       textParts.push(aiZh);
     }
     textParts.push(
-      `以上由 DeepSeek 自动生成，仅供参考；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。`,
+      `以上由 DeepSeek 自动判定与翻译；请以贵司业务判断为准${includeMark ? "，并使用下方按钮标记有效/无效" : ""}。`,
     );
   }
   if (includeMark) {

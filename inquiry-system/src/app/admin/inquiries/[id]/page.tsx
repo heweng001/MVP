@@ -104,10 +104,6 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dd>{item.markedAt ? format(item.markedAt, "yyyy-MM-dd HH:mm:ss") : "—"}</dd>
           </div>
           <div>
-            <dt className="text-[var(--muted)]">垃圾分</dt>
-            <dd>{item.spamScore}</dd>
-          </div>
-          <div>
             <dt className="text-[var(--muted)]">AI 判定（DeepSeek）</dt>
             <dd>
               {aiLabelDisplay(item.aiSpamLabel)}
@@ -124,7 +120,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
             <dd className="mt-1 text-sm whitespace-pre-wrap">
               {item.aiSummaryZh?.trim() || "—"}
               <span className="block text-[11px] text-[var(--muted)] mt-1">
-                DeepSeek 自动生成，仅供参考，不影响系统分流。
+                DeepSeek 系统判定，用于是否发给客户。
               </span>
             </dd>
           </div>
@@ -192,7 +188,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
         </dl>
         {hits.length ? (
           <div>
-            <div className="text-sm text-[var(--muted)] mb-1">命中规则</div>
+            <div className="text-sm text-[var(--muted)] mb-1">判定依据</div>
             <ul className="text-sm list-disc pl-5">
               {hits.map((h) => (
                 <li key={h}>{h}</li>
@@ -204,7 +200,7 @@ export default async function InquiryDetailPage({ params }: Ctx) {
           <p className="text-sm text-[var(--warn)]">本条曾触发降级放行/发信异常。</p>
         ) : null}
         {item.autoSentReview ? (
-          <p className="text-sm text-[var(--muted)]">本条因待审超时自动发送。</p>
+          <p className="text-sm text-[var(--muted)]">本条曾由历史待审迁移/自动发送。</p>
         ) : null}
         {item.notes ? (
           <pre className="text-xs text-[var(--muted)] whitespace-pre-wrap">{item.notes}</pre>

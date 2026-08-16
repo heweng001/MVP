@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 /**
  * 阿里云 cron 入口（按 task 拆分，避免混在高频任务里）：
- * - task=review（默认）：每日中午批量转发全部待审核
+ * - task=review（默认）：迁移存量「待审核」——DeepSeek 重判后分流（新询盘已无审核队列）
  * - task=monthly-report：每月 1 号自动生成上月月报（无则创建）
  */
 export async function POST(req: NextRequest) {
