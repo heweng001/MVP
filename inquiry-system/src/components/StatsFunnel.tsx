@@ -36,7 +36,7 @@ export function StatsFunnel({
         <div className="flex items-baseline gap-2 min-w-0">
           <div className="text-[13px] font-medium shrink-0">本月转化漏斗</div>
           <p className="text-[11px] text-[var(--muted)] truncate">
-            {year}年{month}月 · 逐层 = 上一步 − 本步剔除
+            {year}年{month}月 · 提交 → 已转发 → 未标记无效 → 标记有效
           </p>
         </div>
         <div className="text-[11px] text-[var(--muted)] shrink-0">

@@ -156,7 +156,6 @@ export function funnelLayers(s: SiteMonthStat) {
   const submitted = s.total;
   const unmarked = s.pending;
   const forwarded = s.forwarded;
-  const notForwarded = Math.max(0, submitted - forwarded);
   const pendingPlusValid = unmarked + s.valid;
   const markedValid = s.valid;
 
@@ -164,7 +163,7 @@ export function funnelLayers(s: SiteMonthStat) {
     {
       key: "submitted",
       label: "本月提交",
-      hint: "本月全部入库询盘",
+      hint: "本月全部入库的询盘（含 DeepSeek 拦截未发的）",
       value: submitted,
       removed: 0,
       removedLabel: "",
@@ -172,15 +171,15 @@ export function funnelLayers(s: SiteMonthStat) {
     {
       key: "forwarded",
       label: "已转发",
-      hint: "本月提交 − 未转发（含 DeepSeek 自动垃圾、历史审核垃圾、发信失败等）",
+      hint: "已成功发给客户第一封邮件的询盘（有发信记录）",
       value: forwarded,
-      removed: notForwarded,
-      removedLabel: "未转发",
+      removed: 0,
+      removedLabel: "",
     },
     {
       key: "unmarked_plus_valid",
       label: "未标记无效",
-      hint: "待标记+有效",
+      hint: "已转发中：待客户标记 + 已标有效（不含已标无效）",
       value: pendingPlusValid,
       removed: 0,
       removedLabel: "",
@@ -188,7 +187,7 @@ export function funnelLayers(s: SiteMonthStat) {
     {
       key: "valid",
       label: "标记有效",
-      hint: "客户（或管理员）标记为有效",
+      hint: "客户或管理员已标记为有效的询盘",
       value: markedValid,
       removed: 0,
       removedLabel: "",

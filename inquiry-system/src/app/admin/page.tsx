@@ -53,10 +53,10 @@ export default async function AdminHome({
         hint={
           <div className="space-y-1.5">
             <p>
-              有效占比 = (标记有效 + 待标记) / 已转发 × 100%
+              有效占比 = (标记有效 + 待标记) / 已转发 × 100%。询盘是否发给客户由 DeepSeek 判定。
             </p>
             <p>
-              「拦截」= DeepSeek 自动垃圾 + 历史审核垃圾。漏斗：提交 → 已转发 → 未标记无效 → 标记有效。
+              漏斗：本月提交 → 已转发（已发第一封）→ 未标记无效（待标记+有效）→ 标记有效。列表「拦截」含 DeepSeek 自动垃圾与历史审核垃圾。
             </p>
           </div>
         }
