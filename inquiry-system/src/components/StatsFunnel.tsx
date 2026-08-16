@@ -8,10 +8,10 @@ function pct(n: number) {
 }
 
 function layerHref(key: string, year: number, month: number) {
-  if (key === "submitted" || key === "after_auto") {
+  if (key === "submitted") {
     return `/admin/inquiries?tab=all&year=${year}&month=${month}`;
   }
-  if (key === "after_review" || key === "unmarked_plus_valid") {
+  if (key === "forwarded" || key === "unmarked_plus_valid") {
     return `/admin/inquiries?tab=forwarded&year=${year}&month=${month}`;
   }
   return `/admin/inquiries?tab=valid&year=${year}&month=${month}`;

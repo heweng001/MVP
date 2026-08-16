@@ -56,7 +56,7 @@ export default async function AdminHome({
               有效占比 = (标记有效 + 待标记) / 已转发 × 100%
             </p>
             <p>
-              「拦截」= DeepSeek 自动垃圾 + 历史审核垃圾。漏斗：提交 → DeepSeek 拦截后剩 → 已转发 → 未标记无效 → 标记有效。
+              「拦截」= DeepSeek 自动垃圾 + 历史审核垃圾。漏斗：提交 → 已转发 → 未标记无效 → 标记有效。
             </p>
           </div>
         }

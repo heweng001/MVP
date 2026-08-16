@@ -151,14 +151,12 @@ export async function siteMonthStats(
   });
 }
 
-/** 漏斗各层数量（逐层「上一步 − 本步剔除」收窄） */
+/** 漏斗四层：提交 → 已转发 → 未标记无效 → 标记有效 */
 export function funnelLayers(s: SiteMonthStat) {
   const submitted = s.total;
   const unmarked = s.pending;
-  // DeepSeek 拦截后剩 = 提交 − 自动垃圾（历史审核垃圾等计入后续「未转发」）
-  const afterAiRemain = Math.max(0, submitted - s.autoSpam);
-  const notForwarded = Math.max(0, afterAiRemain - s.forwarded);
-  const forwardedRemain = Math.max(0, afterAiRemain - notForwarded);
+  const forwarded = s.forwarded;
+  const notForwarded = Math.max(0, submitted - forwarded);
   const pendingPlusValid = unmarked + s.valid;
   const markedValid = s.valid;
 
@@ -172,18 +170,10 @@ export function funnelLayers(s: SiteMonthStat) {
       removedLabel: "",
     },
     {
-      key: "after_auto",
-      label: "DeepSeek 拦截后剩",
-      hint: "本月提交 − DeepSeek 判定为自动垃圾",
-      value: afterAiRemain,
-      removed: s.autoSpam,
-      removedLabel: "自动垃圾",
-    },
-    {
-      key: "after_review",
+      key: "forwarded",
       label: "已转发",
-      hint: "DeepSeek 拦截后剩 − 未转发（含历史审核垃圾等未发给客户的询盘）",
-      value: forwardedRemain,
+      hint: "本月提交 − 未转发（含 DeepSeek 自动垃圾、历史审核垃圾、发信失败等）",
+      value: forwarded,
       removed: notForwarded,
       removedLabel: "未转发",
     },
