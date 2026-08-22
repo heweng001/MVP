@@ -17,6 +17,7 @@
 - 推送成功：阻止本次 WPForms 原生通知（由中心系统过滤后发信）
 - 推送失败：不拦截 WPForms 通知（降级放行，避免丢单）
 - 请保留 WPForms 通知收件人配置作为降级备用
+- **v1.0.16**：Message 为 WPForms `text` 类型时也能写入正文（不再只猜 textarea）
 - **v1.0.15**：浏览路径表头改为「页面 / 北京时间 / 停留秒数」；时间转 Asia/Shanghai；页面列附带 URL 路径
 - **v1.0.14**：Smart Tag 为空时，用已抓到的 journey 数据生成 WPForms 风格 HTML（Page/Date/Duration），避免询盘侧空白
 - **v1.0.13**：REST 自更新（`/wp-json/inquiry-bridge/v1/self-update`，校验 site_key，仅允许从询盘中心下载 zip）；配合中心「更新插件」

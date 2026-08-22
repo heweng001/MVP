@@ -13,6 +13,7 @@ export type InquiryListItem = {
   name: string;
   email: string;
   message: string;
+  forwarded: boolean;
   markReason: string;
   spamScore: number;
   aiSpamLabel: string;
@@ -336,12 +337,22 @@ export function InquiryListBoard({
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       {item.aiSpamLabel === "spam" ? (
-                        <span
-                          className="text-rose-700"
-                          title={item.aiSummaryZh || "DeepSeek：疑似垃圾"}
-                        >
-                          疑似垃圾
-                        </span>
+                        <div>
+                          <span
+                            className="text-rose-700"
+                            title={item.aiSummaryZh || "DeepSeek：疑似垃圾"}
+                          >
+                            疑似垃圾
+                          </span>
+                          {item.forwarded ? (
+                            <div
+                              className="text-[10px] text-[var(--muted)]"
+                              title="DeepSeek 判垃圾，运营补发后已发给客户"
+                            >
+                              已人工补发
+                            </div>
+                          ) : null}
+                        </div>
                       ) : item.aiSpamLabel === "ham" ? (
                         <span
                           className="text-emerald-700"

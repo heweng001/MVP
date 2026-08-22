@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { InquiryStatus } from "@/lib/constants";
 import { InquiryListBoard } from "@/components/InquiryListBoard";
+import { resolveInquiryMessage } from "@/lib/inquiry-mail-fields";
 import { monthRange } from "@/lib/stats";
 import { format } from "date-fns";
 import type { Prisma } from "@prisma/client";
@@ -16,7 +17,7 @@ const TABS = [
     key: "spam",
     label: "垃圾",
     status: "",
-    hint: "DeepSeek 判定为垃圾而未发给客户的询盘（含历史审核垃圾）；可补发。",
+    hint: "DeepSeek 判定为垃圾且尚未发给客户的询盘（含历史审核垃圾）；补发后进入待标记。",
   },
   {
     key: "forwarded",
@@ -67,6 +68,7 @@ function tabWhere(tab: string): Prisma.InquiryWhereInput {
   if (tab === "spam") {
     return {
       status: { in: [InquiryStatus.AUTO_SPAM, InquiryStatus.REVIEW_SPAM] },
+      sentAt: null,
     };
   }
   if (tab === "pending") {
@@ -141,6 +143,7 @@ export default async function InquiriesPage({
       where: {
         ...baseWhere,
         status: { in: [InquiryStatus.AUTO_SPAM, InquiryStatus.REVIEW_SPAM] },
+        sentAt: null,
       },
     }),
     prisma.inquiry.findMany({
@@ -202,7 +205,8 @@ export default async function InquiriesPage({
           status: item.status,
           name: item.name,
           email: item.email,
-          message: item.message,
+          message: resolveInquiryMessage(item.rawPayload, item.message),
+          forwarded: Boolean(item.sentAt),
           markReason: item.markReason || "",
           spamScore: item.spamScore,
           aiSpamLabel: item.aiSpamLabel || "",

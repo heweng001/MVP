@@ -1,12 +1,13 @@
 import { randomBytes } from "crypto";
 import { prisma } from "./prisma";
-import { InquiryStatus } from "./constants";
+import { InquiryStatus, isSpamStatus } from "./constants";
 import { parseEmails, sendInquiryEmail } from "./email";
 import {
   buildFollowupMailContent,
   buildInquiryMailContent,
   redactBuyerEmails,
   resolveInquiryName,
+  resolveInquiryMessage,
 } from "./inquiry-mail-fields";
 import { mailContentGate } from "./mail-content-gate";
 import { ensureInquiryAiForMail, runInquiryAiAnalysis } from "./inquiry-ai";
@@ -164,7 +165,11 @@ export async function sendInquiryById(inquiryId: string, opts?: SendInquiryOpts)
     degraded: opts?.degraded ?? inquiry.degraded,
     autoSentReview: opts?.autoSentReview ?? inquiry.autoSentReview,
   };
-  if (opts?.setPending || inquiry.status === InquiryStatus.REVIEW) {
+  if (
+    opts?.setPending ||
+    inquiry.status === InquiryStatus.REVIEW ||
+    isSpamStatus(inquiry.status)
+  ) {
     data.status = InquiryStatus.PENDING;
   }
 
@@ -284,7 +289,10 @@ export async function ingestInquiry(body: IngestBody) {
   const email = String(body.email ?? "");
   const phone = String(body.phone ?? "");
   const subject = "";
-  const message = String(body.message ?? "");
+  const message = resolveInquiryMessage(
+    JSON.stringify({ fields: body.fields ?? {} }),
+    String(body.message ?? ""),
+  );
   const pageUrl = String(body.page_url ?? "");
 
   // 先入库为 pending；DeepSeek 判定后再分流（失败则放行发信）

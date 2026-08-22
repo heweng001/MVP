@@ -96,6 +96,49 @@ function isPageUrlField(f: WpFormFieldRow, pageUrl: string) {
   return false;
 }
 
+const MESSAGE_FIELD_TYPES = new Set([
+  "textarea",
+  "richtext",
+  "rich-text",
+  "content",
+]);
+const MESSAGE_SKIP_TYPES = new Set([
+  "hidden",
+  "email",
+  "name",
+  "phone",
+  "file",
+  "upload",
+  "file-upload",
+  "media",
+  "html",
+  "pagebreak",
+  "divider",
+  "captcha",
+]);
+
+/**
+ * 从 rawPayload 纠正正文：WPForms 常把 Message 做成 text 而非 textarea，
+ * 插件若未配字段 ID 会漏填 Inquiry.message，列表就会显示「无正文」。
+ */
+export function resolveInquiryMessage(
+  rawPayload: string | null | undefined,
+  storedMessage = "",
+): string {
+  const stored = String(storedMessage || "").trim();
+  if (stored) return stored;
+  const all = parseWpFormFields(rawPayload);
+  for (const f of all) {
+    if (MESSAGE_FIELD_TYPES.has(f.type) && f.value.trim()) return f.value.trim();
+  }
+  for (const f of all) {
+    if (MESSAGE_SKIP_TYPES.has(f.type)) continue;
+    if (isPageUrlLabelKey(normFieldKey(f.label))) continue;
+    if (labelLooksLikeMessage(f.label) && f.value.trim()) return f.value.trim();
+  }
+  return "";
+}
+
 /**
  * 从 rawPayload 纠正 Name：优先 WPForms name 类型，其次姓名类标签；排除 Company
  * （兼容插件旧版把 Company 误写入 name 的数据）

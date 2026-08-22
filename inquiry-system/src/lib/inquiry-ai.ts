@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { resolveInquiryMessage } from "./inquiry-mail-fields";
 
 export type InquiryAiLabel = "spam" | "ham";
 
@@ -198,13 +199,22 @@ export async function runInquiryAiAnalysis(
     include: { site: { select: { domain: true, productKeywords: true } } },
   });
   if (!inquiry) return null;
-  if (
+  const message = resolveInquiryMessage(inquiry.rawPayload, inquiry.message);
+  if (!inquiry.message.trim() && message) {
+    await prisma.inquiry.update({
+      where: { id: inquiryId },
+      data: { message },
+    });
+  }
+  const emptyZhPlaceholder = (inquiry.aiMessageZh || "").trim() === "（无正文）";
+  const shouldReuse =
     !opts?.force &&
     inquiry.aiAnalyzedAt &&
     !inquiry.aiError &&
     inquiry.aiSummaryZh &&
-    inquiry.aiMessageZh
-  ) {
+    inquiry.aiMessageZh &&
+    !(emptyZhPlaceholder && message);
+  if (shouldReuse) {
     return {
       isSpam: inquiry.aiSpamLabel === "spam",
       confidence: inquiry.aiConfidence ?? 0,
@@ -221,14 +231,14 @@ export async function runInquiryAiAnalysis(
         name: inquiry.name,
         email: inquiry.email,
         phone: inquiry.phone,
-        message: inquiry.message,
+        message,
         pageUrl: inquiry.pageUrl,
         domain: inquiry.site.domain,
         productKeywords: inquiry.site.productKeywords,
       }),
       timeoutMs,
     );
-    if (!result.messageZh && !inquiry.message.trim()) {
+    if (!result.messageZh && !message.trim()) {
       result.messageZh = "（无正文）";
     }
     await prisma.inquiry.update({
@@ -262,10 +272,21 @@ export async function runInquiryAiAnalysis(
 export async function ensureInquiryAiForMail(inquiryId: string) {
   const row = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
-    select: { aiSummaryZh: true, aiMessageZh: true, aiAnalyzedAt: true, aiError: true },
+    select: {
+      aiSummaryZh: true,
+      aiMessageZh: true,
+      aiAnalyzedAt: true,
+      aiError: true,
+      message: true,
+      rawPayload: true,
+    },
   });
   if (!row) return;
-  if (row.aiSummaryZh?.trim() && row.aiMessageZh?.trim()) return;
+  const message = resolveInquiryMessage(row.rawPayload, row.message);
+  const hasSummary = Boolean(row.aiSummaryZh?.trim());
+  const zh = (row.aiMessageZh || "").trim();
+  const hasRealZh = Boolean(zh) && zh !== "（无正文）";
+  if (hasSummary && (hasRealZh || !message)) return;
   if (!isDeepSeekConfigured()) return;
   await runInquiryAiAnalysis(inquiryId, { timeoutMs: DEFAULT_TIMEOUT_MS, force: true });
 }

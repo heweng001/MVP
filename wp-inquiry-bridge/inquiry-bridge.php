@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inquiry Bridge for WPForms
  * Description: 将 WPForms 询盘推送到询盘管理系统；推送成功则阻止 WPForms 原生通知，失败则降级由 WPForms 发信。
- * Version: 1.0.15
+ * Version: 1.0.16
  * Author: Inquiry System
  * Requires Plugins: wpforms
  */
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 final class Inquiry_Bridge_Plugin
 {
     const OPTION = 'inquiry_bridge_settings';
-    const VERSION = '1.0.15';
+    const VERSION = '1.0.16';
 
     public static function init()
     {
@@ -327,6 +327,59 @@ final class Inquiry_Bridge_Plugin
         }
         // fullname / yourname / contactname / 姓名 等；避免单独匹配过宽的 "na"
         return (bool) preg_match('/^(name|fullname|fullname|yourname|contactname|firstname|lastname|姓名|名字|联系人)$|(^|[^a-z])name([^a-z]|$)|姓名|名字|联系人/', $key);
+    }
+
+    private static function label_is_page_url($key)
+    {
+        if ($key === '') {
+            return false;
+        }
+        return (bool) preg_match('/pageurl|inquiryurl|inquirypage|sourceurl|sourcepage|formurl|询盘页面|询盘链接|页面链接|发询盘页面/', $key);
+    }
+
+    private static function label_is_message($key)
+    {
+        if ($key === '') {
+            return false;
+        }
+        if (self::label_is_page_url($key)) {
+            return false;
+        }
+        return (bool) preg_match('/^(message|messages|comment|comments|enquiry|inquiry|content|留言|内容|正文|备注|询盘内容)$|留言|message|comment|enquiry|inquiry/', $key);
+    }
+
+    /**
+     * 猜测正文：textarea/richtext 优先；WPForms 常把 Message 做成 text
+     */
+    private static function guess_message($fields)
+    {
+        if (!is_array($fields)) {
+            return '';
+        }
+        foreach ($fields as $field) {
+            $type = isset($field['type']) ? (string) $field['type'] : '';
+            if (in_array($type, ['textarea', 'richtext', 'rich-text', 'content'], true)) {
+                $v = isset($field['value']) ? trim((string) $field['value']) : '';
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+        }
+        foreach ($fields as $field) {
+            $type = isset($field['type']) ? (string) $field['type'] : '';
+            if (in_array($type, ['hidden', 'email', 'name', 'phone', 'file', 'html'], true)) {
+                continue;
+            }
+            $key = self::field_label_key($field);
+            if (!self::label_is_message($key)) {
+                continue;
+            }
+            $v = isset($field['value']) ? trim((string) $field['value']) : '';
+            if ($v !== '') {
+                return $v;
+            }
+        }
+        return '';
     }
 
     /**
@@ -1287,7 +1340,7 @@ final class Inquiry_Bridge_Plugin
             $phone = self::guess_field($fields, ['phone']);
         }
         if ($message === '') {
-            $message = self::guess_field($fields, ['textarea']);
+            $message = self::guess_message($fields);
         }
 
         $page_url = '';

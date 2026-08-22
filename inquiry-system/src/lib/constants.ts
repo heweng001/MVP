@@ -38,8 +38,8 @@ export const STATUS_LABELS: Record<string, string> = {
 export const STATUS_HINTS: Record<string, string> = {
   all: "显示当前筛选条件下的所有询盘。",
   review: "历史状态：旧版人工审核队列。新询盘不再进入此状态；存量会由 cron 按 DeepSeek 重判迁移。",
-  spam: "未发给客户的垃圾询盘：含 DeepSeek 自动判定的「自动垃圾」，以及历史「审核垃圾」。",
-  auto_spam: "DeepSeek 判定为垃圾，未发给客户；可补发。",
+  spam: "未发给客户的垃圾询盘：含 DeepSeek 自动判定的「自动垃圾」，以及历史「审核垃圾」。补发后会进入待标记。",
+  auto_spam: "DeepSeek 判定为垃圾，未发给客户；补发后进入待标记。",
   review_spam: "历史：管理员标为垃圾的询盘。",
   forwarded: "已成功发给客户的询盘（含待标记、有效、无效）。",
   pending: "已转发且等待客户点有效/无效。发信超过 72 小时后不可再标无效，仍可标有效。",
